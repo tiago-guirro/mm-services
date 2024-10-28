@@ -189,7 +189,6 @@ class Precificacao:
             custos = self.get_customedio(rul.get('idfilialsaldo',0))
 
             for custo in custos:
-
                 rule = rul.copy()
                 _frete:float = 0
 
