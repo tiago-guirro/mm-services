@@ -1,0 +1,6 @@
+.history/*
+.venv/*
+.gitignore
+cache/*
+pricing/__pycache__/*
+teste.py
