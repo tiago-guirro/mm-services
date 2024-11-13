@@ -29,12 +29,16 @@ schedule.every().day.at("22:00", 'America/Sao_Paulo').do(
     pool,
     capture_exception,
     logger)
-schedule.every(4).hours.do(
+schedule.every(
+    int(os.getenv("SCHEDULER_CUSTOMEDIO",'240'))
+    ).minutes.do(
     CustoMedio,
     pool,
     capture_exception,
     logger)
-schedule.every(10).minutes.do(
+schedule.every(
+    int(os.getenv("SCHEDULER_PRECIFICACAO",'10'))
+    ).minutes.do(
     Precificacao,
     pool,
     capture_exception,
