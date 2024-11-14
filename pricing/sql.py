@@ -194,8 +194,7 @@ with
 		  produto.idproduto::Varchar ||' '||
 		  coalesce(trim(produto.descricao),'') ||' '||
 		  coalesce(trim(produto.modelo),'') ||' '||
-		  coalesce(marca."descricao",'') ||' '||
-		  coalesce(departamento."descricao",'')
+		  coalesce(marca."descricao",'')
 	  ) as pesquisa
 	from 
 	  glb.produto produto
