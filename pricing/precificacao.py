@@ -276,7 +276,7 @@ class Precificacao:
                 # Verificando se existe o mesmo preço
                 if price_now == price:
                     continue
-                
+
                 if price_now == 0:
                     base.update({key : price})
 
