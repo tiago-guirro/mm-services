@@ -2,30 +2,13 @@
 
 SQL_INIT_TEST = """
 
-with
-  saldo as (
-	select 
-		produtogradesaldofilial.idfilial,
-		produtogradesaldofilial.idproduto,
-		produtogradesaldofilial.idgradex,
-		produtogradesaldofilial.idgradey,
-		sum(produtogradesaldofilial.saldo * tiposaldoproduto.multiplicadordisponivel) as saldo 
-	from 
-		rst.produtogradesaldofilial produtogradesaldofilial
-		left join sis.tiposaldoproduto tiposaldoproduto using (idtiposaldoproduto)
-	where 
-		--produtogradesaldofilial.idfilial in (10001,10050,10083,10132)
-        produtogradesaldofilial.idfilial = %(idfilial)s
-	group by 
-		1,2,3,4
-	having sum(produtogradesaldofilial.saldo * tiposaldoproduto.multiplicadordisponivel) > 0
-  )
-
+/*
+with 
+  produtos as (
   
   
-
 select 
-  produtogradefilial.idfilial,
+  %(idfilial)s as idfilial,
   produtogradefilial.idproduto,
   produtogradefilial.idgradex,
   produtogradefilial.idgradey,
@@ -48,7 +31,14 @@ case
   end      ) 
     over (partition by produtogradefilial.idfilial,
     produtogradefilial.idproduto order by produtogradefilial.ultimaentrada desc nulls last,
-    produtogradefilial.customedio desc) as customedio_agrupado
+    produtogradefilial.customedio desc) as customedio_agrupado,
+    row_number() over (
+    partition by produtogradefilial.idproduto, 
+    produtogradefilial.idgradex,
+    produtogradefilial.idgradey
+    order by case when produtogradefilial.idfilial = %(idfilial)s then 0 else 1 end
+    ) as posicao
+    
 from 
   rst.produtogradefilial produtogradefilial
   inner join glb.produtograde produtograde 
@@ -57,22 +47,120 @@ from
     using (idproduto)
   inner join glb.departamento departamento 
     using (iddepartamento)
-  inner join saldo saldo 
-    on saldo.idfilial = produtogradefilial.idfilial
-    and saldo.idproduto = produtogradefilial.idproduto
-    and saldo.idgradex = produtogradefilial.idgradex
-    and saldo.idgradey = produtogradefilial.idgradey
   left join ecode.preco_customedio customedio 
     on produtogradefilial.idfilial = customedio.idfilial 
 	and produtogradefilial.idproduto = customedio.idproduto
 	and produtogradefilial.idgradex = customedio.idgradex
 	and produtogradefilial.idgradey = customedio.idgradey
 where  
-  produtogradefilial.idfilial = %(idfilial)s
+  greatest(produtogradefilial.ultimaentrada, produtogradefilial.ultimasaida, produtogradefilial.ultimaprevisaoareceber) >= CURRENT_DATE - interval '1 year'
+  and (case 
+	when %(idfilial)s in (10001,10083) then 
+	  produtogradefilial.idfilial in (10001,10083)
+	else 
+	  produtogradefilial.idfilial = %(idfilial)s
+	end)
   and produtogradefilial.customedio > 0
+  and (
+  		public.getsaldoproduto(produtogradefilial.idfilial, produtogradefilial.idproduto,produtogradefilial.idgradex,produtogradefilial.idgradey, 1, 1)  > 0 or 
+    	public.getsaldoproduto(produtogradefilial.idfilial, produtogradefilial.idproduto,produtogradefilial.idgradex,produtogradefilial.idgradey, 1, 4) > 0
+       )
+
+
+  
+  )
+
+  
+ select * from produtos where posicao = 1
+ 
+ 
+ */
+  
+with 
+  produtos as (
+  
+  
+select 
+  %(idfilial)s as idfilial,
+  produtogradefilial.idproduto,
+  produtogradefilial.idgradex,
+  produtogradefilial.idgradey,
+  produto.descricao,
+  case 
+  	when produtogradefilial.idfilial = 10083 
+      then coalesce(nullif(coalesce(customedio.custo_calc_unit,0) - coalesce(customedio.vlr_icms_st_recup_calc,0),0),produtogradefilial.customedio,0)
+      else coalesce(nullif(coalesce(customedio.custo_calc_unit,0),0),produtogradefilial.customedio,0)
+  end as customedio,
+  produto.iddepartamento,
+  produto.idmarca,
+  produto.idcodigonbm,
+  produto.idsituacaoorigem,
+  departamento.classificacao,
+  departamento.iddepartamento,
+  first_value(
+case 
+  	when produtogradefilial.idfilial = 10083 
+      then coalesce(nullif(coalesce(customedio.custo_calc_unit,0) - coalesce(customedio.vlr_icms_st_recup_calc,0),0),produtogradefilial.customedio,0)
+      else coalesce(nullif(coalesce(customedio.custo_calc_unit,0),0),produtogradefilial.customedio,0)
+  end      ) 
+    over (partition by produtogradefilial.idfilial,
+    produtogradefilial.idproduto order by produtogradefilial.ultimaentrada desc nulls last,
+    produtogradefilial.customedio desc) as customedio_agrupado,
+    row_number() over (
+    partition by produtogradefilial.idproduto, 
+    produtogradefilial.idgradex,
+    produtogradefilial.idgradey
+    order by case when produtogradefilial.idfilial = %(idfilial)s then 0 else 1 end
+    ) as posicao
+    
+from 
+  rst.produtogradefilial produtogradefilial
+  inner join glb.produtograde produtograde 
+    using (idproduto, idgradex, idgradey)
+  inner join glb.produto produto 
+    using (idproduto)
+  inner join glb.departamento departamento 
+    using (iddepartamento)
+  left join ecode.preco_customedio customedio 
+    on produtogradefilial.idfilial = customedio.idfilial 
+	and produtogradefilial.idproduto = customedio.idproduto
+	and produtogradefilial.idgradex = customedio.idgradex
+	and produtogradefilial.idgradey = customedio.idgradey
+where  
+  greatest(produtogradefilial.ultimaentrada, produtogradefilial.ultimasaida, produtogradefilial.ultimaprevisaoareceber) >= CURRENT_DATE - interval '1 year'
+  and (case 
+	when %(idfilial)s in (10001,10083) then 
+	  produtogradefilial.idfilial in (10001,10083)
+	else 
+	  produtogradefilial.idfilial = %(idfilial)s
+	end)
+  and produtogradefilial.customedio > 0
+  and (
+  		public.getsaldoproduto(produtogradefilial.idfilial, produtogradefilial.idproduto,produtogradefilial.idgradex,produtogradefilial.idgradey, 1, 1)  > 0 or 
+    	public.getsaldoproduto(produtogradefilial.idfilial, produtogradefilial.idproduto,produtogradefilial.idgradex,produtogradefilial.idgradey, 1, 4) > 0
+       )
+
+
+  
+  and (produto.iddepartamento between (format('1%%s',rpad(nullif(%(classificacao)s,''),9,'0')))::integer and (format('1%%s',rpad(nullif(%(classificacao)s,''),9,'9')))::integer)
+  and (customedio.idproduto = coalesce(%(idproduto)s,customedio.idproduto) 
+  and customedio.idgradex = coalesce(%(idgradex)s,customedio.idgradex)
+  and customedio.idgradey = coalesce(%(idgradey)s,customedio.idgradey))
+  and produto.idmarca = coalesce(%(idmarca)s,produto.idmarca)
+  and produto.idsituacaoorigem = coalesce(%(origem)s,produto.idsituacaoorigem)
+  and produto.idcodigonbm = coalesce(%(ncm)s,produto.idcodigonbm)
+
+  )
+  
+  
+ select * from produtos where posicao = 1
+ 
+ 
+ 
 """
 
 SQL_LOAD_REGRA = """
+
 select
 	base.idfilial,
 	base.idfilialsaldo,
@@ -117,8 +205,7 @@ select
     base.agrupar_x_y,
     integracao.desoneracao_piscofins,
 	integracao.customedio_campo,
-    base.interestadual,
-    count(1) over (partition by base.id_base) as n_registros
+    base.interestadual
 from
 	ecode.preco_base base
 left join ecode.preco_classificacao classificacao 
@@ -151,8 +238,7 @@ order by
   base.idfilial,
   base.idfilialsaldo,
   base.idgrupopreco,
-  prioridade desc,
-  n_registros
+  prioridade desc
 """
 
 ARVORE_DEPARTAMENTO = """
@@ -268,11 +354,12 @@ select
   lp.idproduto,
   lp.idgradex,
   lp.idgradey,
-  lp.precovenda 
+  round(lp.precovenda,2) as precovenda 
 from 
   ecode.log_precificacao lp 
 where
-  lp.precovenda > 0
+  coalesce(lp.precovenda,0) > 0
+order by idgrupopreco, idproduto , idgradex , idgradey
 """
 
 SQL_LOAD_UF = """
@@ -756,5 +843,6 @@ on conflict
 do update set
   custo_calc_unit = excluded.custo_calc_unit,
   vlr_icms_st_recup_calc = excluded.vlr_icms_st_recup_calc, 
-  origem_reg = excluded.origem_reg
+  origem_reg = excluded.origem_reg,
+  created_at = now()
 """

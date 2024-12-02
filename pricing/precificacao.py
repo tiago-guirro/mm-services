@@ -1,5 +1,5 @@
 """Módulo de precificação e criação do multi-grupo preço MM."""
-# from datetime import datetime
+import gc
 import math
 from decimal import Decimal
 from diskcache import Cache
@@ -21,6 +21,7 @@ class Precificacao:
     def __init__(self, pool, capture_exception, logger):
         """Inicialdo conexão"""
         self.non_chance_price: list = []
+        self._del_cache: list = []
         self.pool = pool
         self.capture_exception = capture_exception
         self.logger = logger
@@ -43,6 +44,7 @@ class Precificacao:
                 with conn.cursor(row_factory=dict_row) as cur:
                     with conn.transaction():
                         _cache = cur.execute(SQL_FRETE_TOTAL, prepare=False).fetchall()
+                        self._del_cache.append('Frete')
                         self.cache.set('Frete',_cache)
                         return _cache
         except psycopg.Error as e:
@@ -62,9 +64,23 @@ class Precificacao:
                 continue
             if classificacao.startswith(f.get('classificacao'),0):
                 _cache = f.get('frete',0)
+                self._del_cache.append(_key_frete_search)
                 self.cache.set(_key_frete_search,_cache)
                 return _cache
         return 0
+
+
+    def _base_preco_comparacao(self):
+        with self.pool.connection() as conn:
+            with conn.cursor(row_factory=dict_row) as cur:
+                with conn.transaction():
+                    preco = cur.execute(SQL_LOAD_PRECOS_TOTAL, prepare=False).fetchall()
+        comparacao: dict = {}
+        for p in preco:
+            comparacao.update({
+                f"{p.get('idgrupopreco')}.{p.get('idproduto')}.{p.get('idgradex')}.{p.get('idgradey')}" : p.get('precovenda')
+            })
+        return comparacao
 
     def load_preco(self):
         """Carregamento de preço"""
@@ -76,6 +92,7 @@ class Precificacao:
                 with conn.cursor(row_factory=dict_row) as cur:
                     with conn.transaction():
                         _cache = cur.execute(SQL_LOAD_PRECOS_TOTAL, prepare=False).fetchall()
+                        self._del_cache.append(_key_load)
                         self.cache.set(_key_load,_cache)
                         return _cache
         except psycopg.Error as e:
@@ -97,9 +114,26 @@ class Precificacao:
                 x.get('idgrupopreco') == idgrupopreco
                 ):
                 _cache = float(x.get('precovenda',0))
+                self._del_cache.append(_key)
                 self.cache.set(_key,_cache)
                 return _cache
         return 0
+    
+    def _get_customedio_ajustado(self, **k):
+        key: str = '.'.join(str(x or 'xxx') for x in k.values())
+        if key in self.cache:
+            return self.cache.get(key)
+        try:
+            with self.pool.connection() as conn:
+                with conn.cursor(row_factory=dict_row) as cur:
+                    with conn.transaction():
+                        cur.execute(SQL_INIT_TEST, k, prepare=False)
+                        self.cache.set(key, cur.fetchall())
+                        return self.cache.get(key)
+        except psycopg.Error as e:
+            self.setting_error('get_customedio', e)
+            return None
+        
 
     def get_customedio(self, idfilial: int):
         """Coletando no cache os dados por produto"""
@@ -117,6 +151,7 @@ class Precificacao:
         except psycopg.Error as e:
             self.setting_error('get_customedio', e)
             return None
+        self._del_cache.append(_key)
         self.cache.set(_key,_cache)
         return _cache
 
@@ -125,8 +160,9 @@ class Precificacao:
         _desoneracao: float = ((100 - rl.get('icms',0)) / 100)
         _pis: float  = rl.get('pis',0) * _desoneracao
         _cofins: float = rl.get('cofins',0) * _desoneracao
-        _icms: Decimal = (Decimal(4.0) if rl.get('interestadual','Não') == 'Sim'
-                and idsituacaoorigem in (1,2,3,8) else rl.get('icms',0))
+        _icms: Decimal = rl.get('icms',0)
+        if rl.get('idgrupopreco') != 1005 and idsituacaoorigem in (1,2,3,8):
+            _icms = Decimal(4.0)
         # Alterando para o log o novo icms
         rl.update({"icms" : _icms})
         _idx: float = (
@@ -168,6 +204,9 @@ class Precificacao:
         self.non_chance_price.append(key)
         return False
 
+    def _set_hash(self, line: dict):
+        return '|'.join([str(x or '') for x in line.values()])
+
     def __set_precificacao(self):
         """Criando precificação"""
         try:
@@ -178,43 +217,37 @@ class Precificacao:
         except psycopg.Error as e:
             self.setting_error('get_customedio', e)
             return None
-
         totalizador: int = 1
 
         log_pool: list = []
         log_preco: list = []
+        
+        
+        base = self._base_preco_comparacao()
+        
+
 
         for rul in rules:
-            # Listando regras por ordem de importancia
-            custos = self.get_customedio(rul.get('idfilialsaldo',0))
 
+            # Listando regras por ordem de importancia
+            custos = self._get_customedio_ajustado(
+                idfilial = rul.get('idfilialsaldo'),
+                ncm = rul.get('ncm'),
+                classificacao = rul.get('classificacao'),
+                origem = rul.get('origem'),
+                idmarca = rul.get('idmarca'),
+                idproduto = rul.get('idproduto'),
+                idgradex = rul.get('idgradex'),
+                idgradey = rul.get('idgradey')
+            )
+                        
             for custo in custos:
+
                 rule = rul.copy()
                 _frete:float = 0
+                
+                key: str = f"{rule.get('idgrupopreco')}.{custo.get('idproduto')}.{custo.get('idgradex')}.{custo.get('idgradey')}"
 
-                # Regra ncm
-                if (rule.get('ncm') and
-                    rule.get('ncm') != custo.get('idcodigonbm')):
-                    continue
-                # Regra produto
-                if (rule.get('idproduto') and
-                    (rule.get('idproduto') != custo.get('idproduto') and
-                    rule.get('idgradex') != custo.get('idgradex') and
-                    rule.get('idgradey') != custo.get('idgradey')
-                    )):
-                    continue
-                # Regra marca
-                if (rule.get('idmarca') and
-                    rule.get('idmarca') != custo.get('idmarca')):
-                    continue
-                # Regra origem
-                if (rule.get('origem') and
-                    rule.get('origem') != custo.get('idsituacaoorigem')):
-                    continue
-                # Regra classificacao
-                if (rule.get('classificacao') and not
-                    custo.get('classificacao').startswith(rule.get('classificacao'),0)):
-                    continue
                 if self.__no_duplicate_key(
                     idproduto=custo.get('idproduto'),
                     idgradex=custo.get('idgradex'),
@@ -230,23 +263,22 @@ class Precificacao:
                     rule.get('idgrupopreco'), custo.get('classificacao'))
                 if _frete > 0:
                     rule.update({'frete' : _frete})
-                price = self.get_calc_sales_price(
-                    _customedio, rule, custo.get('idsituacaoorigem', 0))
+                price: Decimal = round(Decimal(self.get_calc_sales_price(
+                    _customedio, rule, custo.get('idsituacaoorigem', 0))),2)
+
 
                 # Validando preço zero ou igual customedio
                 if price <= _customedio or price <= 0:
                     raise ValueError('Custo abaixo do permitido')
 
-                price_now = self.get_preco_cache(
-                    rule.get('idgrupopreco'),
-                    custo.get('idproduto'),
-                    custo.get('idgradex'),
-                    custo.get('idgradey')
-                    )
+                price_now = round(base.get(key,0),2)
 
                 # Verificando se existe o mesmo preço
                 if price_now == price:
                     continue
+                
+                if price_now == 0:
+                    base.update({key : price})
 
                 totalizador += 1
 
@@ -283,10 +315,13 @@ class Precificacao:
                     log_preco.clear()
                     log_pool.clear()
 
-        yield {'INSERT_LOG_PRECIFICACAO' : log_pool}
-        yield {'INSERT_PRODUTOGRADEPRECOGRUPO' : log_preco}
-        log_preco.clear()
-        log_pool.clear()
+            if len(log_pool) > 0:
+                yield {'INSERT_LOG_PRECIFICACAO' : log_pool}
+            if len(log_preco) > 0:
+                yield {'INSERT_PRODUTOGRADEPRECOGRUPO' : log_preco}
+            log_preco.clear()
+            log_pool.clear()
+            gc.collect()
 
     def __lote_persist(self) -> None:
         """Inserindo lote de dados"""
@@ -298,6 +333,8 @@ class Precificacao:
 
     def __del__(self):
         """del conexão"""
+        for key in self._del_cache:
+            del self.cache[key]
         self.non_chance_price.clear()
         self.cache.clear()
         self.cache.close()
