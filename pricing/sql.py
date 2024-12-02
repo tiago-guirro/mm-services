@@ -13,7 +13,7 @@ select
   produtogradefilial.idgradey,
   produto.descricao,
   case 
-  	when produtogradefilial.idfilial = 10083 
+  	when %(idfilial)s = 10083 
       then coalesce(nullif(coalesce(customedio.custo_calc_unit,0) - coalesce(customedio.vlr_icms_st_recup_calc,0),0),produtogradefilial.customedio,0)
       else coalesce(nullif(coalesce(customedio.custo_calc_unit,0),0),produtogradefilial.customedio,0)
   end as customedio,
@@ -25,7 +25,7 @@ select
   departamento.iddepartamento,
   first_value(
 case 
-  	when produtogradefilial.idfilial = 10083 
+  	when %(idfilial)s = 10083 
       then coalesce(nullif(coalesce(customedio.custo_calc_unit,0) - coalesce(customedio.vlr_icms_st_recup_calc,0),0),produtogradefilial.customedio,0)
       else coalesce(nullif(coalesce(customedio.custo_calc_unit,0),0),produtogradefilial.customedio,0)
   end      ) 

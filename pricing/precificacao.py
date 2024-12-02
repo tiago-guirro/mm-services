@@ -118,7 +118,7 @@ class Precificacao:
                 self.cache.set(_key,_cache)
                 return _cache
         return 0
-    
+
     def _get_customedio_ajustado(self, **k):
         key: str = '.'.join(str(x or 'xxx') for x in k.values())
         if key in self.cache:
@@ -221,11 +221,7 @@ class Precificacao:
 
         log_pool: list = []
         log_preco: list = []
-        
-        
         base = self._base_preco_comparacao()
-        
-
 
         for rul in rules:
 
@@ -240,14 +236,11 @@ class Precificacao:
                 idgradex = rul.get('idgradex'),
                 idgradey = rul.get('idgradey')
             )
-                        
+            
             for custo in custos:
-
                 rule = rul.copy()
                 _frete:float = 0
-                
                 key: str = f"{rule.get('idgrupopreco')}.{custo.get('idproduto')}.{custo.get('idgradex')}.{custo.get('idgradey')}"
-
                 if self.__no_duplicate_key(
                     idproduto=custo.get('idproduto'),
                     idgradex=custo.get('idgradex'),
@@ -272,6 +265,7 @@ class Precificacao:
                     raise ValueError('Custo abaixo do permitido')
 
                 price_now = round(base.get(key,0),2)
+
 
                 # Verificando se existe o mesmo preço
                 if price_now == price:
