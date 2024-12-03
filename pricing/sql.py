@@ -65,10 +65,7 @@ where
   		public.getsaldoproduto(produtogradefilial.idfilial, produtogradefilial.idproduto,produtogradefilial.idgradex,produtogradefilial.idgradey, 1, 1)  > 0 or 
     	public.getsaldoproduto(produtogradefilial.idfilial, produtogradefilial.idproduto,produtogradefilial.idgradex,produtogradefilial.idgradey, 1, 4) > 0
        )
-
-
-  
-  and (produto.iddepartamento between (format('1%%s',rpad(nullif(%(classificacao)s,''),9,'0')))::integer and (format('1%%s',rpad(nullif(%(classificacao)s,''),9,'9')))::integer)
+  and (produto.iddepartamento between (format('1%%s',rpad(coalesce(nullif(%(classificacao)s,''),'0'),9,'0')))::integer and (format('1%%s',rpad(coalesce(nullif(%(classificacao)s,''),'9'),9,'9')))::integer)
   and (customedio.idproduto = coalesce(%(idproduto)s,customedio.idproduto) 
   and customedio.idgradex = coalesce(%(idgradex)s,customedio.idgradex)
   and customedio.idgradey = coalesce(%(idgradey)s,customedio.idgradey))
