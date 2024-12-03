@@ -97,7 +97,7 @@ select
 	base.margem,
 	base.adicional,
 	base.frete,
-	coalesce(classificacao.classificacao,'01') as classificacao,
+	classificacao.classificacao,
  	preco_produto.idproduto, 
  	preco_produto.idgradex,
  	preco_produto.idgradey, 	
