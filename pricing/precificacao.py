@@ -133,7 +133,6 @@ class Precificacao:
         except psycopg.Error as e:
             self.setting_error('get_customedio', e)
             return None
-        
 
     def get_customedio(self, idfilial: int):
         """Coletando no cache os dados por produto"""
@@ -236,7 +235,7 @@ class Precificacao:
                 idgradex = rul.get('idgradex'),
                 idgradey = rul.get('idgradey')
             )
-            
+
             for custo in custos:
                 rule = rul.copy()
                 _frete:float = 0
@@ -259,13 +258,11 @@ class Precificacao:
                 price: Decimal = round(Decimal(self.get_calc_sales_price(
                     _customedio, rule, custo.get('idsituacaoorigem', 0))),2)
 
-
                 # Validando preço zero ou igual customedio
                 if price <= _customedio or price <= 0:
                     raise ValueError('Custo abaixo do permitido')
 
                 price_now = round(base.get(key,0),2)
-
 
                 # Verificando se existe o mesmo preço
                 if price_now == price:
@@ -291,7 +288,7 @@ class Precificacao:
                 _log.update({"adicional" : rule.get('adicional')})
                 _log.update({"customedio" : _customedio})
                 _log.update({"precovenda" : price})
-                _log.update({"regra" : rule.get('regra')})
+                _log.update({"regra" : f"{rule.get('id_base')}-{rule.get('regra')}"})
                 _preco:dict = {}
                 _preco.update({"idproduto" : custo.get('idproduto')})
                 _preco.update({"idgradex" : custo.get('idgradex')})

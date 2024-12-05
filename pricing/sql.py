@@ -85,6 +85,7 @@ where
 SQL_LOAD_REGRA = """
 
 select
+    base.id_base,
 	base.idfilial,
 	base.idfilialsaldo,
 	base.idgrupopreco,
