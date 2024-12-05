@@ -60,7 +60,6 @@ where
 	else 
 	  produtogradefilial.idfilial = %(idfilial)s
 	end)
-  and produtogradefilial.customedio > 0
   and (
   		public.getsaldoproduto(produtogradefilial.idfilial, produtogradefilial.idproduto,produtogradefilial.idgradex,produtogradefilial.idgradey, 1, 1)  > 0 or 
     	public.getsaldoproduto(produtogradefilial.idfilial, produtogradefilial.idproduto,produtogradefilial.idgradex,produtogradefilial.idgradey, 1, 4) > 0
@@ -75,11 +74,7 @@ where
 
   )
   
-  
  select * from produtos where posicao = 1
- 
- 
- 
 """
 
 SQL_LOAD_REGRA = """
@@ -100,8 +95,8 @@ select
  	preco_produto.idgradex,
  	preco_produto.idgradey, 	
 	marca.idmarca,
-	origem.origem, 				-- Validação por peso
-	ncm.ncm, 					-- Validação por peso
+	origem.origem, 
+	ncm.ncm,
 	integracao.recuperacao_st,
 	integracao.ler_api_frete,
 	(
@@ -113,7 +108,7 @@ select
 		when classificacao.classificacao is not null and marca.idmarca is null then 6
 		else 1
 	end
-	* (case when origem.origem is not null then 2 else 1 end) --Peso na origem
+	* (case when origem.origem is not null then 2 else 1 end)
 	) as prioridade,
     (
 	case
@@ -162,7 +157,10 @@ order by
   base.idfilial,
   base.idfilialsaldo,
   base.idgrupopreco,
-  prioridade desc
+  prioridade desc,
+  ncm.ncm nulls last,
+  length(classificacao.classificacao) desc, 
+  classificacao.classificacao asc  nulls last
 """
 
 ARVORE_DEPARTAMENTO = """
