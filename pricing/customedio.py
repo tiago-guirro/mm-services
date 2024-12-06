@@ -27,7 +27,7 @@ class CustoMedio:
         self._logger.info("CustoMedio")
         self._cache = Cache(self.__URL)
         self._cache.clear()
-        self._load_custo_medio_remarcacao()
+        # self._load_custo_medio_remarcacao()
         self._load_filiais_precificar()
         self._load_produtos_filial()
 
@@ -50,12 +50,15 @@ class CustoMedio:
                 SQL_GET_CUST_MEDIO,
                 params,
                 prepare=False).fetchone()
-            if (custo_medio.get('custo_calc_unit')
-                and custo_medio.get('custo_calc_unit',0)):
-                return custo_medio
-            raise psycopg.Error('Preço zero')
+            if not custo_medio:
+                return False
+            params.update({'atualizar' : True})
+            if params.get('custo_calc_unit',0) == custo_medio.get('custo_calc_unit',0):
+                params.update({'atualizar' : False})
+            params |= custo_medio
+            return True
         except psycopg.Error:
-            return None
+            return False
 
     def _load_custo_medio_remarcacao(self):
         try:
@@ -83,23 +86,35 @@ class CustoMedio:
         return None
 
     def _gravacao_customedio(self, params):
-        with self._pool.connection() as conn:
-            conn.execute(SQL_PERSISTENCIA_CUSTO, params, prepare=False)
+        try:
+            with self._pool.connection() as conn:
+                with conn.cursor() as cur:
+                    cur.executemany(SQL_PERSISTENCIA_CUSTO, params)
+        except (psycopg.errors.DuplicatePreparedStatement, psycopg.errors.InvalidSqlStatementName):
+            self._gravacao_customedio(params)
+        except psycopg.Error as e:
+            self._setting_error('_gravacao_customedio', e)
 
     def _load_produtos_filial(self):
+        custos:list = []
+        n: int = 0
         for idfilial in self._filiais:
             with self._pool.connection() as conn:
                 with conn.cursor(row_factory=dict_row) as cur:
                     cur.execute(SQL_LOAD_PRODUTO_FILIAL, [idfilial], prepare=False)
                     for c in cur:
-                        custo_medio = (self._load_custo_medio_funcao(conn,c)
-                                        or self._pesquisa_custo_medio_remarcacao(
-                                            idfilial,
-                                            c.get('idproduto'),
-                                            c.get('idgradex'),
-                                            c.get('idgradey')))
-                        if (custo_medio
-                            and custo_medio.get('custo_calc_unit',Decimal(0)) > Decimal(0)
-                            and custo_medio.get('custo_calc_unit') != c.get('custo_calc_unit')):
-                            c.update(custo_medio)
-                            self._gravacao_customedio(c)
+                        if not self._load_custo_medio_funcao(conn,c):
+                            continue
+                        if (c is None or
+                            c.get('atualizar',False) is False
+                            or c.get('custo_calc_unit',0) is None):
+                            continue
+                        if c.get('custo_calc_unit',0) <= 0:
+                            continue
+                        custos.append(c)
+                        if len(custos) == 50:
+                            n += 50
+                            self._gravacao_customedio(custos)
+                            custos.clear()
+                    self._gravacao_customedio(custos)
+                    custos.clear()

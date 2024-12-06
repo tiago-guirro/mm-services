@@ -69,7 +69,6 @@ class Precificacao:
                 return _cache
         return 0
 
-
     def _base_preco_comparacao(self):
         with self.pool.connection() as conn:
             with conn.cursor(row_factory=dict_row) as cur:
@@ -81,43 +80,6 @@ class Precificacao:
                 f"{p.get('idgrupopreco')}.{p.get('idproduto')}.{p.get('idgradex')}.{p.get('idgradey')}" : p.get('precovenda')
             })
         return comparacao
-
-    def load_preco(self):
-        """Carregamento de preço"""
-        _key_load = "load_preco"
-        if _key_load in self.cache:
-            return self.cache.get(_key_load)
-        try:
-            with self.pool.connection() as conn:
-                with conn.cursor(row_factory=dict_row) as cur:
-                    with conn.transaction():
-                        _cache = cur.execute(SQL_LOAD_PRECOS_TOTAL, prepare=False).fetchall()
-                        self._del_cache.append(_key_load)
-                        self.cache.set(_key_load,_cache)
-                        return _cache
-        except psycopg.Error as e:
-            self.setting_error('load_preco', e)
-            return None
-
-    def get_preco_cache(self, idgrupopreco: int, idproduto: int, idgradex: int, idgradey: int):
-        """Coletando no cache os dados por produto"""
-        _key = f"preco_cache_{idgrupopreco}_{idproduto}_{idgradex}_{idgradey}"
-        if _key in self.cache:
-            return self.cache.get(_key)
-        precos = self.load_preco()
-        if not precos:
-            return 0
-        for x in precos:
-            if (x.get('idproduto') == idproduto and
-                x.get('idgradex') == idgradex and
-                x.get('idgradey') == idgradey and
-                x.get('idgrupopreco') == idgrupopreco
-                ):
-                _cache = float(x.get('precovenda',0))
-                self._del_cache.append(_key)
-                self.cache.set(_key,_cache)
-                return _cache
-        return 0
 
     def _get_customedio_ajustado(self, **k):
         key: str = '.'.join(str(x or 'xxx') for x in k.values())
@@ -186,9 +148,10 @@ class Precificacao:
                     with conn.transaction():
                         cur.executemany(sql, bigdata)
                         self.logger.info("insert_many " + str(len(bigdata)))
+        except (psycopg.errors.DuplicatePreparedStatement, psycopg.errors.InvalidSqlStatementName):
+            self.insert_many(sql, bigdata)
         except psycopg.Error as e:
             self.setting_error('insert_many', e)
-            self.insert_many(sql, bigdata)
 
     def __no_duplicate_key(self, **k) -> bool:
         """Gerando key para não duplicidade de cadastro"""
@@ -268,8 +231,7 @@ class Precificacao:
                 if price_now == price:
                     continue
 
-                if price_now == 0:
-                    base.update({key : price})
+                base.update({key : price})
 
                 totalizador += 1
 
@@ -325,7 +287,8 @@ class Precificacao:
     def __del__(self):
         """del conexão"""
         for key in self._del_cache:
-            del self.cache[key]
+            if key in self.cache:
+                del self.cache[key]
         self.non_chance_price.clear()
         self.cache.clear()
         self.cache.close()

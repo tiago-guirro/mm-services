@@ -684,15 +684,15 @@ from
 	  using(idfilial, idproduto, idgradex, idgradey)
 where 
 	produtogradefilial.idfilial = %s
-	and coalesce(produtogradefilial.customedio,0) > 0
 	and greatest(produtogradefilial.ultimaentrada,produtogradefilial.ultimacompra,produtogradefilial.ultimaprevisaoareceber) >= current_date - interval '1 year'
 order by 
+    coalesce(preco_customedio.custo_calc_unit,0) desc,
     greatest(produtogradefilial.ultimaentrada,produtogradefilial.ultimacompra,produtogradefilial.ultimaprevisaoareceber) desc
 """
 
 SQL_GET_CUST_MEDIO = """
-select custo_medio.custo_calc_unit,
-	  custo_medio.vlr_icms_st_recup_calc,
+select round(custo_medio.custo_calc_unit,2) as custo_calc_unit,
+	  round(custo_medio.vlr_icms_st_recup_calc,2) as vlr_icms_st_recup_calc,
 	  custo_medio.origem_reg
 	  from mm.busca_ultima_entrada_com_icms_itb_teste(
 	  case when %(idfilial)s in (10001,10083,10050) then 10050 else %(idfilial)s end,
@@ -703,7 +703,7 @@ select custo_medio.custo_calc_unit,
 	  999999999) as custo_medio
 """
 SQL_GET_FILIAIS_PRECIFICAR = """
-select distinct idfilialsaldo from ecode.preco_base where situacao = 'Ativo'
+select distinct idfilialsaldo from ecode.preco_base where situacao = 'Ativo' order by idfilialsaldo desc
 """
 
 SQL_GET_CUST_MEDIO_RESERVA = """
