@@ -30,7 +30,7 @@ schedule.every().day.at("22:00", 'America/Sao_Paulo').do(
     capture_exception,
     logger)
 schedule.every(
-    int(os.getenv("SCHEDULER_CUSTOMEDIO",'240'))
+    int(os.getenv("SCHEDULER_CUSTOMEDIO",'10'))
     ).minutes.do(
     CustoMedio,
     pool,
