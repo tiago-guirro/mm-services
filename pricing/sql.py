@@ -672,30 +672,85 @@ SQL_UPDATE_CACHE_SALDO_FUNCAO = """
 """
 
 SQL_LOAD_PRODUTO_FILIAL = """
-select 
+
+
+ with produtos as (
+  
+  select 
+    p.idfilial,
+    p.idproduto,
+    p.idgradex,
+    p.idgradey,
+    sum(p.saldo * t.multiplicadordisponivel) as saldo 
+  from 
+    rst.produtogradesaldofilial p 
+    left join sis.tiposaldoproduto t using (idtiposaldoproduto)
+  where 
+    p.idfilial = %(idfilial)s
+  group by 
+    1,2,3,4
+  having 
+    sum(p.saldo * t.multiplicadordisponivel) > 0
+    
+    union 
+    
+    select 
+      i.idfilial,
+      i.idproduto,
+      i.idgradex,
+      i.idgradey,
+      i."quantidade" as saldo
+    from 
+      rst.itempedidocompra i 
+    where 
+      i.idfilial = %(idfilial)s
+      and idsituacaopedidocompra = 1
+  
+  ),
+  
+  custo_existente as (
+	
+    select 
+      pc.idfilial,
+      pc.idproduto,
+      pc.idgradex,
+      pc.idgradey,
+      pc.custo_calc_unit,
+	  pc.vlr_icms_st_recup_calc
+	from 
+      ecode.preco_customedio pc 
+    where 
+      pc.idfilial = %(idfilial)s
+   
+  )
+
+  select 
+    distinct on (1,2,3,4)
 	produtogradefilial.idfilial,
 	produtogradefilial.idproduto,
 	produtogradefilial.idgradex,
 	produtogradefilial.idgradey,
-	coalesce(preco_customedio.custo_calc_unit,0) as custo_calc_unit 
+	ce.custo_calc_unit as custo_calc_unit
 from 
 	rst.produtogradefilial produtogradefilial
-	left join ecode.preco_customedio preco_customedio
-	  using(idfilial, idproduto, idgradex, idgradey)
+	inner join produtos saldo using (idfilial, idproduto,idgradex, idgradey)
+	inner join glb.produto produto using (idproduto)
+    left join custo_existente ce using (idfilial, idproduto,idgradex, idgradey)
 where 
-	produtogradefilial.idfilial = %s
-	and greatest(produtogradefilial.ultimaentrada,produtogradefilial.ultimacompra,produtogradefilial.ultimaprevisaoareceber) >= current_date - interval '1 year'
+	produtogradefilial.idfilial = %(idfilial)s
+	and substring(produto.iddepartamento::varchar,2,2) in ('01','02','03','04','05','06','07','08','09','13','15','19')
 order by 
-    coalesce(preco_customedio.custo_calc_unit,0) desc,
-    greatest(produtogradefilial.ultimaentrada,produtogradefilial.ultimacompra,produtogradefilial.ultimaprevisaoareceber) desc
+    1,2,3,4  
 """
 
 SQL_GET_CUST_MEDIO = """
-select round(custo_medio.custo_calc_unit,2) as custo_calc_unit,
-	  round(custo_medio.vlr_icms_st_recup_calc,2) as vlr_icms_st_recup_calc,
-	  custo_medio.origem_reg
-	  from mm.busca_ultima_entrada_com_icms_itb_teste(
-	  case when %(idfilial)s in (10001,10083,10050) then 10050 else %(idfilial)s end,
+select 
+    round(custo_medio.custo_calc_unit,2) as custo_calc_unit,
+	round(custo_medio.vlr_icms_st_recup_calc,2) as vlr_icms_st_recup_calc,
+	custo_medio.origem_reg
+from 
+ 	mm.busca_ultima_entrada_com_icms_itb_teste(
+	  %(idfilial)s,
 	  %(idproduto)s,
 	  %(idgradex)s,
 	  %(idgradey)s,

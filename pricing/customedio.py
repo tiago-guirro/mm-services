@@ -1,5 +1,4 @@
 """Módulo de precificação e criação do multi-grupo preço MM."""
-from decimal import Decimal
 from diskcache import Cache
 import psycopg
 from psycopg.rows import dict_row
@@ -101,15 +100,13 @@ class CustoMedio:
         for idfilial in self._filiais:
             with self._pool.connection() as conn:
                 with conn.cursor(row_factory=dict_row) as cur:
-                    cur.execute(SQL_LOAD_PRODUTO_FILIAL, [idfilial], prepare=False)
+                    cur.execute(SQL_LOAD_PRODUTO_FILIAL, {'idfilial' : idfilial}, prepare=False)
                     for c in cur:
-                        if not self._load_custo_medio_funcao(conn,c):
+                        if not c:
                             continue
-                        if (c is None or
-                            c.get('atualizar',False) is False
-                            or c.get('custo_calc_unit',0) is None):
+                        if not self._load_custo_medio_funcao(conn, c):
                             continue
-                        if c.get('custo_calc_unit',0) <= 0:
+                        if not c.get('atualizar'):
                             continue
                         custos.append(c)
                         if len(custos) == 50:
