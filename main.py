@@ -24,25 +24,25 @@ logger = logging.getLogger(__name__)
 
 sentry_sdk.init(dsn=os.getenv("MMSENTRY"), traces_sample_rate=1.0) # pylint: disable=abstract-class-instantiated
 
-schedule.every().day.at("22:00", 'America/Sao_Paulo').do(
-    atualizacao_search,
-    pool,
-    capture_exception,
-    logger)
+# schedule.every().day.at("22:00", 'America/Sao_Paulo').do(
+#     atualizacao_search,
+#     pool,
+#     capture_exception,
+#     logger)
 schedule.every(
     int(os.getenv("SCHEDULER_CUSTOMEDIO",'10'))
-    ).minutes.do(
+    ).seconds.do(
     CustoMedio,
     pool,
     capture_exception,
     logger)
-schedule.every(
-    int(os.getenv("SCHEDULER_PRECIFICACAO",'10'))
-    ).minutes.do(
-    Precificacao,
-    pool,
-    capture_exception,
-    logger)
+# schedule.every(
+#     int(os.getenv("SCHEDULER_PRECIFICACAO",'10'))
+#     ).minutes.do(
+#     Precificacao,
+#     pool,
+#     capture_exception,
+#     logger)
 
 logger.info('start mm_worker!')
 

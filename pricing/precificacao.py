@@ -262,7 +262,7 @@ class Precificacao:
                 log_pool.append(_log)
                 log_preco.append(_preco)
 
-                if totalizador % 1000 == 0:
+                if totalizador % 50 == 0:
                     yield {'INSERT_LOG_PRECIFICACAO' : log_pool}
                     yield {'INSERT_PRODUTOGRADEPRECOGRUPO' : log_preco}
                     log_preco.clear()
