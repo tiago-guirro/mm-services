@@ -730,7 +730,8 @@ SQL_LOAD_PRODUTO_FILIAL = """
 	produtogradefilial.idproduto,
 	produtogradefilial.idgradex,
 	produtogradefilial.idgradey,
-	ce.custo_calc_unit as custo_calc_unit
+	ce.custo_calc_unit as custo_calc_unit,
+    ce.vlr_icms_st_recup_calc
 from 
 	rst.produtogradefilial produtogradefilial
 	inner join produtos saldo using (idfilial, idproduto,idgradex, idgradey)
@@ -750,7 +751,7 @@ select
 	custo_medio.origem_reg
 from 
  	mm.busca_ultima_entrada_com_icms_itb_teste(
-	  %(idfilial)s,
+	  case when %(idfilial)s in (10001,10083) then 10050 else %(idfilial)s end,
 	  %(idproduto)s,
 	  %(idgradex)s,
 	  %(idgradey)s,

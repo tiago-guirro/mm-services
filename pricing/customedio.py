@@ -26,7 +26,6 @@ class CustoMedio:
         self._logger.info("CustoMedio")
         self._cache = Cache(self.__URL)
         self._cache.clear()
-        # self._load_custo_medio_remarcacao()
         self._load_filiais_precificar()
         self._load_produtos_filial()
 
@@ -52,7 +51,8 @@ class CustoMedio:
             if not custo_medio:
                 return False
             params.update({'atualizar' : True})
-            if params.get('custo_calc_unit',0) == custo_medio.get('custo_calc_unit',0):
+            if (params.get('custo_calc_unit',0) == custo_medio.get('custo_calc_unit',0) and
+                params.get('vlr_icms_st_recup_calc',0) == custo_medio.get('vlr_icms_st_recup_calc',0)):
                 params.update({'atualizar' : False})
             params |= custo_medio
             return True
@@ -96,7 +96,6 @@ class CustoMedio:
 
     def _load_produtos_filial(self):
         custos:list = []
-        n: int = 0
         for idfilial in self._filiais:
             with self._pool.connection() as conn:
                 with conn.cursor(row_factory=dict_row) as cur:
@@ -108,9 +107,9 @@ class CustoMedio:
                             continue
                         if not c.get('atualizar'):
                             continue
+                        print(c)
                         custos.append(c)
-                        if len(custos) == 50:
-                            n += 50
+                        if len(custos) % 50 == 0:
                             self._gravacao_customedio(custos)
                             custos.clear()
                     self._gravacao_customedio(custos)
