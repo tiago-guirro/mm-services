@@ -16,7 +16,7 @@ select
   	when %(idfilial)s = 10083 
       then coalesce(nullif(coalesce(customedio.custo_calc_unit,0) - coalesce(customedio.vlr_icms_st_recup_calc,0),0),produtogradefilial.customedio,0)
       else coalesce(nullif(coalesce(customedio.custo_calc_unit,0),0),produtogradefilial.customedio,0)
-  end as customedio,
+  end + coalesce(customedio.vlr_icms_proprio_entrada_unit,0) as customedio,
   produto.iddepartamento,
   produto.idmarca,
   produto.idcodigonbm,
@@ -28,7 +28,7 @@ case
   	when %(idfilial)s = 10083 
       then coalesce(nullif(coalesce(customedio.custo_calc_unit,0) - coalesce(customedio.vlr_icms_st_recup_calc,0),0),produtogradefilial.customedio,0)
       else coalesce(nullif(coalesce(customedio.custo_calc_unit,0),0),produtogradefilial.customedio,0)
-  end      ) 
+  end + coalesce(customedio.vlr_icms_proprio_entrada_unit,0)) 
     over (partition by produtogradefilial.idfilial,
     produtogradefilial.idproduto order by produtogradefilial.ultimaentrada desc nulls last,
     produtogradefilial.customedio desc) as customedio_agrupado,
@@ -716,7 +716,8 @@ SQL_LOAD_PRODUTO_FILIAL = """
       pc.idgradex,
       pc.idgradey,
       pc.custo_calc_unit,
-	  pc.vlr_icms_st_recup_calc
+	  pc.vlr_icms_st_recup_calc,
+	  pc.vlr_icms_proprio_entrada_unit
 	from 
       ecode.preco_customedio pc 
     where 
@@ -730,8 +731,9 @@ SQL_LOAD_PRODUTO_FILIAL = """
 	produtogradefilial.idproduto,
 	produtogradefilial.idgradex,
 	produtogradefilial.idgradey,
-	ce.custo_calc_unit as custo_calc_unit,
-    ce.vlr_icms_st_recup_calc
+	coalesce(ce.custo_calc_unit,0) as custo_calc_unit,
+    coalesce(ce.vlr_icms_st_recup_calc,0) as vlr_icms_st_recup_calc,
+    coalesce(ce.vlr_icms_proprio_entrada_unit,0) as vlr_icms_proprio_entrada_unit
 from 
 	rst.produtogradefilial produtogradefilial
 	inner join produtos saldo using (idfilial, idproduto,idgradex, idgradey)
@@ -748,6 +750,14 @@ SQL_GET_CUST_MEDIO = """
 select 
     round(custo_medio.custo_calc_unit,2) as custo_calc_unit,
 	round(custo_medio.vlr_icms_st_recup_calc,2) as vlr_icms_st_recup_calc,
+	(CASE 
+        WHEN cast(custo_medio.idfilial  as integer) = 10281
+		THEN (CASE WHEN coalesce(custo_medio.qtdenf,0) > 0
+					THEN round((coalesce(custo_medio.vlr_icms_proprio,0)/coalesce(custo_medio.qtdenf,0)),2)
+					ELSE round((coalesce(custo_medio.vlr_icms_proprio,0)/ 1),2)
+				END)
+		ELSE 0
+	END) as vlr_icms_proprio_entrada_unit,
 	custo_medio.origem_reg
 from 
  	mm.busca_ultima_entrada_com_icms_itb_teste(
@@ -813,14 +823,83 @@ where
 SQL_PERSISTENCIA_CUSTO = """
 insert into 
   ecode.preco_customedio 
-  (idfilial, idproduto, idgradex, idgradey, custo_calc_unit, vlr_icms_st_recup_calc, origem_reg) 
+  (idfilial, idproduto, idgradex, idgradey, custo_calc_unit, vlr_icms_st_recup_calc, vlr_icms_proprio_entrada_unit, origem_reg) 
 values
-  (%(idfilial)s, %(idproduto)s, %(idgradex)s, %(idgradey)s, %(custo_calc_unit)s, %(vlr_icms_st_recup_calc)s, %(origem_reg)s)
+  (%(idfilial)s, %(idproduto)s, %(idgradex)s, %(idgradey)s, %(custo_calc_unit)s, %(vlr_icms_st_recup_calc)s, %(vlr_icms_proprio_entrada_unit)s, %(origem_reg)s)
 on conflict 
   (idfilial, idproduto, idgradex, idgradey)
 do update set
   custo_calc_unit = excluded.custo_calc_unit,
   vlr_icms_st_recup_calc = excluded.vlr_icms_st_recup_calc, 
+  vlr_icms_proprio_entrada_unit = excluded.vlr_icms_proprio_entrada_unit, 
   origem_reg = excluded.origem_reg,
   created_at = now()
+"""
+
+SQL_UPSERT_CUSTOMEDIO="""
+
+with customedio as (
+
+select 
+    %(idfilial)s as idfilial,
+    %(idproduto)s as idproduto, 
+    %(idgradex)s as idgradex, 
+    %(idgradey)s as idgradey, 
+    round(custo_medio.custo_calc_unit,2) as custo_calc_unit,
+	round(custo_medio.vlr_icms_st_recup_calc,2) as vlr_icms_st_recup_calc,
+	(CASE 
+        WHEN cast(custo_medio.idfilial  as integer) = 10281
+		THEN (CASE WHEN coalesce(custo_medio.qtdenf,0) > 0
+					THEN round((coalesce(custo_medio.vlr_icms_proprio,0)/coalesce(custo_medio.qtdenf,0)),2)
+					ELSE round((coalesce(custo_medio.vlr_icms_proprio,0)/ 1),2)
+				END)
+		ELSE 0
+	END) as vlr_icms_proprio_entrada_unit,
+	custo_medio.origem_reg
+from 
+ 	mm.busca_ultima_entrada_com_icms_itb_teste(
+	  case when %(idfilial)s in (10001,10083) then 10050 else %(idfilial)s end,
+	  %(idproduto)s,
+	  %(idgradex)s,
+	  %(idgradey)s,
+	  current_date,
+	  999999999) as custo_medio
+
+),
+persistencia as (
+
+
+	insert into 
+	  ecode.preco_customedio 
+	  (idfilial, idproduto, idgradex, idgradey, custo_calc_unit, vlr_icms_st_recup_calc, vlr_icms_proprio_entrada_unit, origem_reg) 
+	
+	select 
+	  customedio.* 
+	from 
+	  customedio customedio
+	  left join ecode.preco_customedio preco_customedio on 
+	  	customedio.idfilial = preco_customedio.idfilial
+	  	and customedio.idproduto = preco_customedio.idproduto
+	  	and customedio.idgradex = preco_customedio.idgradex
+	  	and customedio.idgradey = preco_customedio.idgradey
+	where 
+	   (coalesce(customedio.custo_calc_unit,0) <> coalesce(preco_customedio.custo_calc_unit,0)
+	   or coalesce(customedio.vlr_icms_st_recup_calc,0) <> coalesce(preco_customedio.vlr_icms_st_recup_calc,0)
+	   or coalesce(customedio.vlr_icms_proprio_entrada_unit,0) <> coalesce(preco_customedio.vlr_icms_proprio_entrada_unit,0))
+	  
+	on conflict 
+	  (idfilial, idproduto, idgradex, idgradey)
+	do update set
+	  custo_calc_unit = excluded.custo_calc_unit,
+	  vlr_icms_st_recup_calc = excluded.vlr_icms_st_recup_calc, 
+	  vlr_icms_proprio_entrada_unit = excluded.vlr_icms_proprio_entrada_unit, 
+	  origem_reg = excluded.origem_reg,
+	  created_at = now()
+	  
+	returning 'atualizado'
+
+
+)
+
+select coalesce((select * from persistencia),'nao_atualizado') as situacao
 """

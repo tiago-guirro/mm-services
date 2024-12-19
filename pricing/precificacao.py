@@ -152,7 +152,7 @@ class Precificacao:
             self.insert_many(sql, bigdata)
         except psycopg.Error as e:
             self.setting_error('insert_many', e)
-
+            
     def __no_duplicate_key(self, **k) -> bool:
         """Gerando key para não duplicidade de cadastro"""
         key = str(

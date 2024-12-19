@@ -7,7 +7,8 @@ from pricing.sql import (
     SQL_GET_CUST_MEDIO,
     SQL_GET_FILIAIS_PRECIFICAR,
     SQL_GET_CUST_MEDIO_REMARCACAO,
-    SQL_PERSISTENCIA_CUSTO
+    SQL_PERSISTENCIA_CUSTO,
+    SQL_UPSERT_CUSTOMEDIO
     )
 
 class CustoMedio:
@@ -52,11 +53,13 @@ class CustoMedio:
                 return False
             params.update({'atualizar' : True})
             if (params.get('custo_calc_unit',0) == custo_medio.get('custo_calc_unit',0) and
-                params.get('vlr_icms_st_recup_calc',0) == custo_medio.get('vlr_icms_st_recup_calc',0)):
+                params.get('vlr_icms_st_recup_calc',0) == custo_medio.get('vlr_icms_st_recup_calc',0) and
+                params.get('vlr_icms_proprio_entrada_unit',0) == custo_medio.get('vlr_icms_proprio_entrada_unit',0)):
                 params.update({'atualizar' : False})
             params |= custo_medio
             return True
-        except psycopg.Error:
+        except psycopg.Error as e:
+            self._setting_error('_load_custo_medio_funcao', e)
             return False
 
     def _load_custo_medio_remarcacao(self):
@@ -66,7 +69,8 @@ class CustoMedio:
                     with conn.transaction():
                         cur.execute(SQL_GET_CUST_MEDIO_REMARCACAO, prepare=False)
                         self._remarcacao = cur.fetchall()
-        except psycopg.Error:
+        except psycopg.Error as e:
+            self._setting_error('_load_custo_medio_remarcacao', e)
             return None
         return None
 
@@ -89,13 +93,21 @@ class CustoMedio:
             with self._pool.connection() as conn:
                 with conn.cursor() as cur:
                     cur.executemany(SQL_PERSISTENCIA_CUSTO, params)
-        except (psycopg.errors.DuplicatePreparedStatement, psycopg.errors.InvalidSqlStatementName):
+        except (psycopg.errors.DuplicatePreparedStatement,
+                psycopg.errors.InvalidSqlStatementName):
             self._gravacao_customedio(params)
         except psycopg.Error as e:
             self._setting_error('_gravacao_customedio', e)
 
+    def _upsert_customedio(self, conn, params):
+        try:
+            return conn.execute(SQL_UPSERT_CUSTOMEDIO, params).fetchone()
+        except (psycopg.Error,
+                psycopg.errors.DuplicatePreparedStatement,
+                psycopg.errors.InvalidSqlStatementName) as e:
+            self._setting_error('_upsert_customedio', e)
+
     def _load_produtos_filial(self):
-        custos:list = []
         for idfilial in self._filiais:
             with self._pool.connection() as conn:
                 with conn.cursor(row_factory=dict_row) as cur:
@@ -103,14 +115,4 @@ class CustoMedio:
                     for c in cur:
                         if not c:
                             continue
-                        if not self._load_custo_medio_funcao(conn, c):
-                            continue
-                        if not c.get('atualizar'):
-                            continue
-                        print(c)
-                        custos.append(c)
-                        if len(custos) % 50 == 0:
-                            self._gravacao_customedio(custos)
-                            custos.clear()
-                    self._gravacao_customedio(custos)
-                    custos.clear()
+                        self._upsert_customedio(conn, c)
