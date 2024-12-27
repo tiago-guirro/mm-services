@@ -76,22 +76,25 @@ class Precificacao:
                     preco = cur.execute(SQL_LOAD_PRECOS_TOTAL, prepare=False).fetchall()
         comparacao: dict = {}
         for p in preco:
-            comparacao.update({
-                f"{p.get('idgrupopreco')}.{p.get('idproduto')}.{p.get('idgradex')}.{p.get('idgradey')}" : p.get('precovenda')
-            })
+            key: str = f"{p.get('idgrupopreco')}.{p.get('idproduto')}.{p.get('idgradex')}.{p.get('idgradey')}"
+            comparacao.update(
+                {
+                    key : {
+                        "precovenda" : round(p.get('precovenda'),2),
+                        "margem" : p.get('margem'),
+                        "frete" : p.get('frete'),
+                        "icms" : p.get('icms')
+                        }
+                })
         return comparacao
 
     def _get_customedio_ajustado(self, **k):
-        key: str = '.'.join(str(x or 'xxx') for x in k.values())
-        if key in self.cache:
-            return self.cache.get(key)
         try:
             with self.pool.connection() as conn:
                 with conn.cursor(row_factory=dict_row) as cur:
                     with conn.transaction():
                         cur.execute(SQL_INIT_TEST, k, prepare=False)
-                        self.cache.set(key, cur.fetchall())
-                        return self.cache.get(key)
+                        return cur.fetchall()
         except psycopg.Error as e:
             self.setting_error('get_customedio', e)
             return None
@@ -152,7 +155,7 @@ class Precificacao:
             self.insert_many(sql, bigdata)
         except psycopg.Error as e:
             self.setting_error('insert_many', e)
-            
+
     def __no_duplicate_key(self, **k) -> bool:
         """Gerando key para não duplicidade de cadastro"""
         key = str(
@@ -200,67 +203,85 @@ class Precificacao:
             )
 
             for custo in custos:
-                rule = rul.copy()
+
                 _frete:float = 0
-                key: str = f"{rule.get('idgrupopreco')}.{custo.get('idproduto')}.{custo.get('idgradex')}.{custo.get('idgradey')}"
+                key: str = f"{rul.get('idgrupopreco')}.{custo.get('idproduto')}.{custo.get('idgradex')}.{custo.get('idgradey')}"
                 if self.__no_duplicate_key(
                     idproduto=custo.get('idproduto'),
                     idgradex=custo.get('idgradex'),
                     idgradey=custo.get('idgradey'),
-                    idgrupopreco=rule.get('idgrupopreco')
+                    idgrupopreco=rul.get('idgrupopreco')
                     ):
                     continue
 
                 # Verificando o formato de agrupamento por idproduto.idgradex.idgradey ou idproduto
-                _customedio = custo.get('customedio_agrupado') if rule.get(
+                _customedio = custo.get('customedio_agrupado') if rul.get(
                     'agrupar_x_y', 'Não') == 'Sim' else custo.get('customedio')
                 _frete = self.get_frete_search(
-                    rule.get('idgrupopreco'), custo.get('classificacao'))
+                    rul.get('idgrupopreco'), custo.get('classificacao'))
                 if _frete > 0:
-                    rule.update({'frete' : _frete})
+                    rul.update({'frete' : _frete})
                 price: Decimal = round(Decimal(self.get_calc_sales_price(
-                    _customedio, rule, custo.get('idsituacaoorigem', 0))),2)
+                    _customedio, rul, custo.get('idsituacaoorigem', 0))),2)
 
                 # Validando preço zero ou igual customedio
                 if price <= _customedio or price <= 0:
                     raise ValueError('Custo abaixo do permitido')
 
-                price_now = round(base.get(key,0),2)
+                base_comparacao = base.get(key,{})
 
                 # Verificando se existe o mesmo preço
-                if price_now == price:
+                if (base_comparacao.get('precovenda') == price
+                    and base_comparacao.get('icms') == Decimal(rul.get('icms'))
+                    and base_comparacao.get('frete') == Decimal(rul.get('frete'))
+                    and base_comparacao.get('margem') == Decimal(rul.get('margem'))
+                    ):
                     continue
 
-                base.update({key : price})
+                base.update(
+                    {
+                        key: {
+                            'precovenda': price,
+                            'icms': Decimal(rul.get('icms')),
+                            'frete': Decimal(_frete),
+                            'margem': Decimal(rul.get('margem'))
+                            }
+                        }
+                    )
 
                 totalizador += 1
 
-                _log:dict = {}
-                _log.update({"idfilial" : rule.get('idfilial')})
-                _log.update({"idfilialsaldo" : rule.get('idfilialsaldo')})
-                _log.update({"idgrupopreco" : rule.get('idgrupopreco')})
-                _log.update({"idproduto" : custo.get('idproduto')})
-                _log.update({"idgradex" : custo.get('idgradex')})
-                _log.update({"idgradey" : custo.get('idgradey')})
-                _log.update({"margem" : rule.get('margem')})
-                _log.update({"icms" : rule.get('icms')})
-                _log.update({"pis" : rule.get('pis')})
-                _log.update({"cofins" : rule.get('cofins')})
-                _log.update({"frete" : rule.get('frete')})
-                _log.update({"adicional" : rule.get('adicional')})
-                _log.update({"customedio" : _customedio})
-                _log.update({"precovenda" : price})
-                _log.update({"regra" : f"{rule.get('id_base')}-{rule.get('regra')}"})
-                _preco:dict = {}
-                _preco.update({"idproduto" : custo.get('idproduto')})
-                _preco.update({"idgradex" : custo.get('idgradex')})
-                _preco.update({"idgradey" : custo.get('idgradey')})
-                _preco.update({"precocusto" : _customedio})
-                _preco.update({"idgrupopreco" : rule.get('idgrupopreco')})
-                _preco.update({"precovenda" : price})
+                log_pool.append(
+                    {
+                        "idfilial": rul.get('idfilial'),
+                        "idfilialsaldo": rul.get('idfilialsaldo'),
+                        "idgrupopreco": rul.get('idgrupopreco'),
+                        "idproduto": custo.get('idproduto'),
+                        "idgradex": custo.get('idgradex'),
+                        "idgradey": custo.get('idgradey'),
+                        "margem": rul.get('margem'),
+                        "icms": rul.get('icms'),
+                        "pis": rul.get('pis'),
+                        "cofins": rul.get('cofins'),
+                        "frete": rul.get('frete'),
+                        "adicional": rul.get('adicional'),
+                        "customedio": _customedio,
+                        "precovenda": price,
+                        "regra": f"{rul.get('id_base')}-{rul.get('regra')}"
+                    }
+                )
 
-                log_pool.append(_log)
-                log_preco.append(_preco)
+                log_preco.append(
+                    {
+                        "idproduto": custo.get('idproduto'),
+                        "idgradex": custo.get('idgradex'),
+                        "idgradey": custo.get('idgradey'),
+                        "precocusto": _customedio,
+                        "idgrupopreco": rul.get('idgrupopreco'),
+                        "precovenda": price
+
+                    }
+                )
 
                 if totalizador % 50 == 0:
                     yield {'INSERT_LOG_PRECIFICACAO' : log_pool}

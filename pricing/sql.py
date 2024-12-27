@@ -74,7 +74,7 @@ where
 
   )
   
- select * from produtos where posicao = 1
+ select * from produtos p where posicao = 1
 """
 
 SQL_LOAD_REGRA = """
@@ -223,7 +223,7 @@ INSERT_LOG_PRECIFICACAO = """
 insert into ecode.log_precificacao (idfilial, idfilialsaldo, idgrupopreco, idproduto, idgradex, idgradey, margem, icms, pis, cofins, frete, adicional, customedio, precovenda, regra)
 values (%(idfilial)s, %(idfilialsaldo)s, %(idgrupopreco)s, %(idproduto)s, %(idgradex)s, %(idgradey)s, %(margem)s, %(icms)s, %(pis)s, %(cofins)s, %(frete)s, %(adicional)s, %(customedio)s, %(precovenda)s, %(regra)s)
 on conflict (idfilial, idfilialsaldo, idgrupopreco, idproduto, idgradex, idgradey) do update set 
-(icms, pis, cofins, frete, adicional, customedio, precovenda, regra, created_at) = (excluded.icms, excluded.pis, excluded.cofins, excluded.frete, excluded.adicional, excluded.customedio, excluded.precovenda, excluded.regra, now())
+(icms, pis, cofins, margem, frete, adicional, customedio, precovenda, regra, created_at) = (excluded.icms, excluded.pis, excluded.cofins, excluded.margem, excluded.frete, excluded.adicional, excluded.customedio, excluded.precovenda, excluded.regra, now())
 """
 
 INSERT_PRODUTOGRADEPRECOGRUPO = """
@@ -276,6 +276,9 @@ select
   lp.idproduto,
   lp.idgradex,
   lp.idgradey,
+  lp.margem,
+  lp.frete,
+  lp.icms,
   round(lp.precovenda,2) as precovenda 
 from 
   ecode.log_precificacao lp 
