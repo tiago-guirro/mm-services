@@ -93,8 +93,7 @@ class Precificacao:
             with self.pool.connection() as conn:
                 with conn.cursor(row_factory=dict_row) as cur:
                     with conn.transaction():
-                        cur.execute(SQL_INIT_TEST, k, prepare=False)
-                        return cur.fetchall()
+                        return cur.execute(SQL_INIT_TEST, k, prepare=False).fetchall()
         except psycopg.Error as e:
             self.setting_error('get_customedio', e)
             return None
@@ -119,24 +118,20 @@ class Precificacao:
         self.cache.set(_key,_cache)
         return _cache
 
-    def get_calc_sales_price(self, customedio: Decimal, rl: dict, idsituacaoorigem: str):
+    def get_calc_sales_price(self, customedio: Decimal, rl: dict, idsituacaoorigem: int):
         """Coletando no cache os dados por produto"""
-        _desoneracao: float = ((100 - rl.get('icms',0)) / 100)
-        _pis: float  = rl.get('pis',0) * _desoneracao
-        _cofins: float = rl.get('cofins',0) * _desoneracao
-        _icms: Decimal = rl.get('icms',0)
-        if rl.get('idgrupopreco') != 1005 and idsituacaoorigem in (1,2,3,8):
-            _icms = Decimal(4.0)
-        # Alterando para o log o novo icms
-        rl.update({"icms" : _icms})
-        _idx: float = (
-            _icms +
-            rl.get('margem',0) +
-            rl.get('adicional',0) +
-            rl.get('frete',0) +
-            _pis +
-            _cofins
-            )
+        if (rl.get('idgrupopreco') != 1005
+            and rl.get('idfilial') != 10281
+            and idsituacaoorigem in (1,2,3,8)):
+            rl.update({"icms" : Decimal(4.0)})
+
+        _desoneracao: float = ((100 - rl.get('icms')) / 100)
+        rll = rl.copy()
+        rll.update({"pis" : round(rl.get('pis') * _desoneracao,4)})
+        rll.update({"cofins" : round(rl.get('cofins') * _desoneracao,4)})
+        keys: list = ['icms','margem','adicional','frete','pis','cofins']
+        _idx: float = sum(rll.get(i) for i in keys)
+        del rll, _desoneracao
         return math.trunc(customedio / (1 - (_idx / 100))) + 0.9
 
     def insert_many(self, sql, bigdata) -> None:
@@ -188,22 +183,21 @@ class Precificacao:
         log_preco: list = []
         base = self._base_preco_comparacao()
 
-        for rul in rules:
-
+        for rul_o in rules:
             # Listando regras por ordem de importancia
             custos = self._get_customedio_ajustado(
-                idfilial = rul.get('idfilialsaldo'),
-                ncm = rul.get('ncm'),
-                classificacao = rul.get('classificacao'),
-                origem = rul.get('origem'),
-                idmarca = rul.get('idmarca'),
-                idproduto = rul.get('idproduto'),
-                idgradex = rul.get('idgradex'),
-                idgradey = rul.get('idgradey')
+                idfilial = rul_o.get('idfilialsaldo'),
+                ncm = rul_o.get('ncm'),
+                classificacao = rul_o.get('classificacao'),
+                origem = rul_o.get('origem'),
+                idmarca = rul_o.get('idmarca'),
+                idproduto = rul_o.get('idproduto'),
+                idgradex = rul_o.get('idgradex'),
+                idgradey = rul_o.get('idgradey')
             )
 
             for custo in custos:
-
+                rul = rul_o.copy()
                 _frete:float = 0
                 key: str = f"{rul.get('idgrupopreco')}.{custo.get('idproduto')}.{custo.get('idgradex')}.{custo.get('idgradey')}"
                 if self.__no_duplicate_key(
