@@ -183,6 +183,9 @@ class Precificacao:
         log_preco: list = []
         base = self._base_preco_comparacao()
 
+
+        
+
         for rul_o in rules:
             # Listando regras por ordem de importancia
             custos = self._get_customedio_ajustado(
@@ -197,7 +200,9 @@ class Precificacao:
             )
 
             for custo in custos:
+
                 rul = rul_o.copy()
+
                 _frete:float = 0
                 key: str = f"{rul.get('idgrupopreco')}.{custo.get('idproduto')}.{custo.get('idgradex')}.{custo.get('idgradey')}"
                 if self.__no_duplicate_key(

@@ -124,7 +124,8 @@ select
     base.agrupar_x_y,
     integracao.desoneracao_piscofins,
 	integracao.customedio_campo,
-    base.interestadual
+    base.interestadual,
+    count(1) over (partition by base.id_base) as n_id_base
 from
 	ecode.preco_base base
 left join ecode.preco_classificacao classificacao 
@@ -154,13 +155,19 @@ left join ecode.preco_pessoa preco_pessoa
 where 
   	base.situacao = 'Ativo'
 order by 
+  base.idgrupopreco,
   base.idfilial,
   base.idfilialsaldo,
-  base.idgrupopreco,
   prioridade desc,
   ncm.ncm nulls last,
-  length(classificacao.classificacao) desc, 
-  classificacao.classificacao asc  nulls last
+  preco_produto.idproduto nulls last, 
+  preco_produto.idgradex nulls last,
+  preco_produto.idgradey nulls last,
+  marca.idmarca nulls last,
+  origem.origem nulls last,
+  length(classificacao.classificacao) desc nulls last, 
+  classificacao.classificacao asc nulls last,
+  n_id_base 
 """
 
 ARVORE_DEPARTAMENTO = """
