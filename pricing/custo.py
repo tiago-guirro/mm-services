@@ -2,15 +2,14 @@
 import psycopg
 from pricing.sql import SQL_CACHE_CUSTO
 
-def atualizacao_custo(pool,  capture_exception, logger):
+def atualizacao_custo(pool, logger):
     """atualizacao_search"""
     logger.info("atualizacao_custo")
+
     try:
         with pool.connection() as conn:
-            with conn.cursor() as cursor:
-                with conn.transaction():
-                    cursor.execute(SQL_CACHE_CUSTO, prepare=False)
+            conn.execute(SQL_CACHE_CUSTO)
+            conn.commit()
     except psycopg.Error as e:
+        conn.rollback()
         logger.error(f"{str(e)} atualizacao_custo")
-        capture_exception(e)
-

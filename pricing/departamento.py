@@ -36,7 +36,7 @@ def cache_departamento(pool, capture_exception, logger):
                     with conn.transaction():
                         print(_key)
                         query = sql.makeinsertquery('arvore_departamento',_key,'ecode')
-                        cursor.execute(query,_key)
+                        cursor.execute(query,_key, prepare=False)
                 except psycopg.Error as e:
                     logger.error(f"{str(e)} departamento")
                     capture_exception(e)

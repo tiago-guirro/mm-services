@@ -3,7 +3,7 @@
 import psycopg
 from pricing.sql import PRODUTOS_TSVECTOR
 
-def atualizacao_search(pool, capture_exception, logger):
+def atualizacao_search(pool, logger):
     """Atualizacao"""
     logger.info("atualizacao_search")
     try:
@@ -13,4 +13,3 @@ def atualizacao_search(pool, capture_exception, logger):
                     cursor.execute(PRODUTOS_TSVECTOR, prepare=False)
     except psycopg.Error as e:
         logger.error(f"{str(e)} atualizacao_search")
-        capture_exception(e)

@@ -18,12 +18,11 @@ class Precificacao:
     """Precificacao"""
     URL = '/home/ecode/Python/MM/cache'
 
-    def __init__(self, pool, capture_exception, logger):
+    def __init__(self, pool, logger):
         """Inicialdo conexão"""
         self.non_chance_price: list = []
         self._del_cache: list = []
         self.pool = pool
-        self.capture_exception = capture_exception
         self.logger = logger
         self.logger.info("Precificacao")
         self.cache = Cache(self.URL)
@@ -33,7 +32,6 @@ class Precificacao:
     def setting_error(self, local, error) -> None:
         """setting_error"""
         self.logger.error(f"{str(error)} {local}")
-        self.capture_exception(error)
 
     def load_frete(self) -> dict | None:
         """Load frete de toda rede"""
@@ -144,7 +142,7 @@ class Precificacao:
                 conn.commit()
                 with conn.cursor() as cur:
                     with conn.transaction():
-                        cur.executemany(sql, bigdata)
+                        cur.executemany(sql, bigdata, prepare=False)
                         self.logger.info("insert_many " + str(len(bigdata)))
         except (psycopg.errors.DuplicatePreparedStatement, psycopg.errors.InvalidSqlStatementName):
             self.insert_many(sql, bigdata)

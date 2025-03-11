@@ -16,7 +16,6 @@ isort==5.13.2
 jmespath==1.0.1
 mccabe==0.7.0
 multidict==6.0.5
-numpy==1.26.4
 openpyxl==3.1.2
 platformdirs==4.2.0
 psycopg==3.2.1

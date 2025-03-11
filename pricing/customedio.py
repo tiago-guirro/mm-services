@@ -17,12 +17,11 @@ class CustoMedio:
 
     __URL = '/home/ecode/Python/MM/cache'
 
-    def __init__(self, pool, capture_exception, logger):
+    def __init__(self, pool, logger):
         """Iniciando conexão"""
         self._filiais: list = []
         self._remarcacao: list = []
         self._pool = pool
-        self._capture_exception = capture_exception
         self._logger = logger
         self._logger.info("CustoMedio")
         self._cache = Cache(self.__URL)
@@ -32,7 +31,6 @@ class CustoMedio:
 
     def _setting_error(self, local, error) -> None:
         self._logger.error(f"{str(error)} {local}")
-        self._capture_exception(error)
 
     def _load_filiais_precificar(self) -> None:
         with self._pool.connection() as conn:
@@ -92,7 +90,7 @@ class CustoMedio:
         try:
             with self._pool.connection() as conn:
                 with conn.cursor() as cur:
-                    cur.executemany(SQL_PERSISTENCIA_CUSTO, params)
+                    cur.executemany(SQL_PERSISTENCIA_CUSTO, params, prepare=False)
         except (psycopg.errors.DuplicatePreparedStatement,
                 psycopg.errors.InvalidSqlStatementName):
             self._gravacao_customedio(params)
@@ -101,7 +99,7 @@ class CustoMedio:
 
     def _upsert_customedio(self, conn, params):
         try:
-            return conn.execute(SQL_UPSERT_CUSTOMEDIO, params).fetchone()
+            return conn.execute(SQL_UPSERT_CUSTOMEDIO, params, prepare=False).fetchone()
         except (psycopg.Error,
                 psycopg.errors.DuplicatePreparedStatement,
                 psycopg.errors.InvalidSqlStatementName) as e:

@@ -5,8 +5,6 @@ import time
 import logging
 import traceback
 import schedule
-import sentry_sdk
-from sentry_sdk import capture_exception
 from pricing.pool_conn import pool
 from pricing.precificacao import Precificacao
 from pricing.search import atualizacao_search
@@ -22,27 +20,22 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-sentry_sdk.init(dsn=os.getenv("MMSENTRY"), traces_sample_rate=1.0) # pylint: disable=abstract-class-instantiated
-
-schedule.every().day.at("22:00", 'America/Sao_Paulo').do(
-    atualizacao_search,
-    pool,
-    capture_exception,
-    logger)
+# schedule.every().day.at("22:00", 'America/Sao_Paulo').do(
+#     atualizacao_search,
+#     pool,
+#     logger)
 schedule.every(
-    int(os.getenv("SCHEDULER_CUSTOMEDIO",'10'))
-    ).minutes.do(
+    int(os.getenv("SCHEDULER_CUSTOMEDIO",'1'))
+    ).seconds.do(
     CustoMedio,
     pool,
-    capture_exception,
     logger)
-schedule.every(
-    int(os.getenv("SCHEDULER_PRECIFICACAO",'10'))
-    ).minutes.do(
-    Precificacao,
-    pool,
-    capture_exception,
-    logger)
+# schedule.every(
+#     int(os.getenv("SCHEDULER_PRECIFICACAO",'10'))
+#     ).minutes.do(
+#     Precificacao,
+#     pool,
+#     logger)
 
 logger.info('start mm_worker!')
 
@@ -52,7 +45,6 @@ while True:
     except Exception as e: # pylint: disable=broad-exception-caught
         logger.error(str(e))
         print(traceback.format_exc())
-        capture_exception(e)
     except KeyboardInterrupt:
         pool.close()
         sys.exit(0)
