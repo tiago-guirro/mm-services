@@ -86,28 +86,21 @@ class CustoMedio:
                     }
         return None
 
-    def _gravacao_customedio(self, params):
-        try:
-            with self._pool.connection() as conn:
-                with conn.cursor() as cur:
-                    cur.executemany(SQL_PERSISTENCIA_CUSTO, params, prepare=False)
-        except (psycopg.errors.DuplicatePreparedStatement,
-                psycopg.errors.InvalidSqlStatementName):
-            self._gravacao_customedio(params)
-        except psycopg.Error as e:
-            self._setting_error('_gravacao_customedio', e)
-
     def _upsert_customedio(self, conn, params):
         try:
-            return conn.execute(SQL_UPSERT_CUSTOMEDIO, params, prepare=False).fetchone()
+            dados = conn.execute(SQL_UPSERT_CUSTOMEDIO, params, prepare=False).fetchone()
+            conn.commit()
+            return dados
         except (psycopg.Error,
                 psycopg.errors.DuplicatePreparedStatement,
                 psycopg.errors.InvalidSqlStatementName) as e:
+            conn.rollback()
             self._setting_error('_upsert_customedio', e)
 
     def _load_produtos_filial(self):
         for idfilial in self._filiais:
             with self._pool.connection() as conn:
+                conn.autocommit = False
                 with conn.cursor(row_factory=dict_row) as cur:
                     cur.execute(SQL_LOAD_PRODUTO_FILIAL, {'idfilial' : idfilial}, prepare=False)
                     for c in cur:

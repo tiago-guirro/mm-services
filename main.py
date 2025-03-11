@@ -20,22 +20,22 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-# schedule.every().day.at("22:00", 'America/Sao_Paulo').do(
-#     atualizacao_search,
-#     pool,
-#     logger)
+schedule.every().day.at("22:00", 'America/Sao_Paulo').do(
+    atualizacao_search,
+    pool,
+    logger)
 schedule.every(
-    int(os.getenv("SCHEDULER_CUSTOMEDIO",'1'))
-    ).seconds.do(
+    int(os.getenv("SCHEDULER_CUSTOMEDIO",'10'))
+    ).minutes.do(
     CustoMedio,
     pool,
     logger)
-# schedule.every(
-#     int(os.getenv("SCHEDULER_PRECIFICACAO",'10'))
-#     ).minutes.do(
-#     Precificacao,
-#     pool,
-#     logger)
+schedule.every(
+    int(os.getenv("SCHEDULER_PRECIFICACAO",'10'))
+    ).minutes.do(
+    Precificacao,
+    pool,
+    logger)
 
 logger.info('start mm_worker!')
 

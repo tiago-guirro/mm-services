@@ -138,15 +138,18 @@ class Precificacao:
             return
         try:
             with self.pool.connection() as conn:
+                conn.autocommit = False
                 conn.prepare_threshold=1000
                 conn.commit()
                 with conn.cursor() as cur:
-                    with conn.transaction():
-                        cur.executemany(sql, bigdata, prepare=False)
-                        self.logger.info("insert_many " + str(len(bigdata)))
+                    cur.executemany(sql, bigdata)
+                    conn.commit()
+                    self.logger.info("insert_many " + str(len(bigdata)))
         except (psycopg.errors.DuplicatePreparedStatement, psycopg.errors.InvalidSqlStatementName):
+            conn.rollback()
             self.insert_many(sql, bigdata)
         except psycopg.Error as e:
+            conn.rollback()
             self.setting_error('insert_many', e)
 
     def __no_duplicate_key(self, **k) -> bool:
