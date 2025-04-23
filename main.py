@@ -9,6 +9,7 @@ from pricing.pool_conn import pool
 from pricing.precificacao import Precificacao
 from pricing.search import atualizacao_search
 from pricing.customedio import CustoMedio
+from pricing.promocao import sales_disable
 
 logging.basicConfig(
     level=logging.INFO,
@@ -34,6 +35,12 @@ schedule.every(
     int(os.getenv("SCHEDULER_PRECIFICACAO",'10'))
     ).minutes.do(
     Precificacao,
+    pool,
+    logger)
+schedule.every(
+    int(os.getenv("SCHEDULER_PROMOCAO",'1'))
+    ).minutes.do(
+    sales_disable,
     pool,
     logger)
 

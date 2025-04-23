@@ -932,3 +932,23 @@ persistencia as (
 
 select coalesce((select * from persistencia),'nao_atualizado') as situacao
 """
+
+SQL_SALES_DISABLE = """
+update  
+  ecode.promocao promocao_base
+set 
+  situacao = 'Inativo'
+from 
+  ecode.promocao promocao
+  left join ecode.bonificacaoprodutoatacado(
+  case when promocao.idgrupopreco in (1008,1009,1010) then 10281 else 10050 end,
+  promocao.idproduto,
+  promocao.idgradex,
+  promocao.idgradey) as bonificacao on true
+where 
+  promocao.situacao = 'Ativo'
+  and current_date between promocao.datainicial and promocao.datafinal
+  and coalesce(promocao.verba,0) > 0
+  and bonificacao.valor <> coalesce(promocao.verba,0)
+  and promocao.id = promocao_base.id
+"""
