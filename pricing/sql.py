@@ -53,8 +53,8 @@ from
 	and produtogradefilial.idgradex = customedio.idgradex
 	and produtogradefilial.idgradey = customedio.idgradey
 where  
-  greatest(produtogradefilial.ultimaentrada, produtogradefilial.ultimasaida, produtogradefilial.ultimaprevisaoareceber) >= CURRENT_DATE - interval '1 year'
-  and (case 
+    /* greatest(produtogradefilial.ultimaentrada, produtogradefilial.ultimasaida, produtogradefilial.ultimaprevisaoareceber) >= CURRENT_DATE - interval '1 year' and */
+   (case 
 	when %(idfilial)s in (10001,10083) then 
 	  produtogradefilial.idfilial in (10001,10083)
 	else 

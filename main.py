@@ -26,13 +26,13 @@ schedule.every().day.at("22:00", 'America/Sao_Paulo').do(
     pool,
     logger)
 schedule.every(
-    int(os.getenv("SCHEDULER_CUSTOMEDIO",'10'))
+    int(os.getenv("SCHEDULER_CUSTOMEDIO",'1'))
     ).minutes.do(
     CustoMedio,
     pool,
     logger)
 schedule.every(
-    int(os.getenv("SCHEDULER_PRECIFICACAO",'10'))
+    int(os.getenv("SCHEDULER_PRECIFICACAO",'1'))
     ).minutes.do(
     Precificacao,
     pool,
