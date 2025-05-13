@@ -949,6 +949,7 @@ where
   promocao.situacao = 'Ativo'
   and current_date between promocao.datainicial and promocao.datafinal
   and coalesce(promocao.verba,0) > 0
-  and bonificacao.valor <> coalesce(promocao.verba,0)
+  and coalesce(bonificacao.valor,0) <> coalesce(promocao.verba,0)
   and promocao.id = promocao_base.id
+returning promocao_base.*
 """
