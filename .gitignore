@@ -1,4 +1,5 @@
 .history/
 venv/
 cache/
+deque/
 pricing/__pycache__/

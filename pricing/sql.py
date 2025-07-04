@@ -154,6 +154,7 @@ left join ecode.preco_pessoa preco_pessoa
 	and preco_pessoa.situacao = 'Ativo'
 where 
   	base.situacao = 'Ativo'
+    and base.idgrupopreco between 1000 and 1199
 order by 
   base.idgrupopreco,
   base.idfilial,
@@ -227,36 +228,48 @@ with
 """
 
 INSERT_LOG_PRECIFICACAO = """
-insert into ecode.log_precificacao (idfilial, idfilialsaldo, idgrupopreco, idproduto, idgradex, idgradey, margem, icms, pis, cofins, frete, adicional, customedio, precovenda, regra)
-values (%(idfilial)s, %(idfilialsaldo)s, %(idgrupopreco)s, %(idproduto)s, %(idgradex)s, %(idgradey)s, %(margem)s, %(icms)s, %(pis)s, %(cofins)s, %(frete)s, %(adicional)s, %(customedio)s, %(precovenda)s, %(regra)s)
-on conflict (idfilial, idfilialsaldo, idgrupopreco, idproduto, idgradex, idgradey) do update set 
-(icms,
-pis,
-cofins,
-margem,
-frete,
-adicional,
-customedio,
-precovenda,
-regra,
-created_at) = 
-(excluded.icms,
-excluded.pis,
-excluded.cofins,
-excluded.margem,
-excluded.frete,
-excluded.adicional,
-excluded.customedio,
-excluded.precovenda,
-excluded.regra,
-now())
+INSERT INTO ecode.log_precificacao 
+    (idfilial, idfilialsaldo, idgrupopreco, idproduto, idgradex, idgradey, margem, icms, pis, cofins, frete, adicional, customedio, precovenda, regra)
+VALUES 
+    (%(idfilial)s, %(idfilialsaldo)s, %(idgrupopreco)s, %(idproduto)s, %(idgradex)s, %(idgradey)s, %(margem)s, %(icms)s, %(pis)s, %(cofins)s, %(frete)s, %(adicional)s, %(customedio)s, %(precovenda)s, %(regra)s)
+ON CONFLICT (idfilial, idfilialsaldo, idgrupopreco, idproduto, idgradex, idgradey) 
+DO UPDATE SET 
+    icms = excluded.icms,
+    pis = excluded.pis,
+    cofins = excluded.cofins,
+    margem = excluded.margem,
+    frete = excluded.frete,
+    adicional = excluded.adicional,
+    customedio = excluded.customedio,
+    precovenda = excluded.precovenda,
+    regra = excluded.regra,
+    created_at = now()
+WHERE 
+    ecode.log_precificacao.icms <> excluded.icms
+    OR ecode.log_precificacao.pis <> excluded.pis
+    OR ecode.log_precificacao.cofins <> excluded.cofins
+    OR ecode.log_precificacao.margem <> excluded.margem
+    OR ecode.log_precificacao.frete <> excluded.frete
+    OR ecode.log_precificacao.adicional <> excluded.adicional
+    OR ecode.log_precificacao.customedio <> excluded.customedio
+    OR ecode.log_precificacao.precovenda <> excluded.precovenda
+    OR ecode.log_precificacao.regra <> excluded.regra
 """
 
 INSERT_PRODUTOGRADEPRECOGRUPO = """
-insert into glb.produtogradeprecogrupo (idproduto, idgradex, idgradey, idgrupopreco, precocusto, precovenda, ultimaalteracao, ultimaremarcacao) 
-values (%(idproduto)s, %(idgradex)s, %(idgradey)s, %(idgrupopreco)s, %(precocusto)s, %(precovenda)s, now(), now())
-on conflict (idproduto, idgradex, idgradey, idgrupopreco) do update set 
-(precocusto, precovenda, ultimaalteracao, ultimaremarcacao) = (excluded.precocusto, excluded.precovenda, now(), now())
+INSERT INTO glb.produtogradeprecogrupo 
+    (idproduto, idgradex, idgradey, idgrupopreco, precocusto, precovenda, ultimaalteracao, ultimaremarcacao) 
+VALUES 
+    (%(idproduto)s, %(idgradex)s, %(idgradey)s, %(idgrupopreco)s, %(precocusto)s, %(precovenda)s, now(), now())
+ON CONFLICT (idproduto, idgradex, idgradey, idgrupopreco) 
+DO UPDATE SET 
+    precocusto = excluded.precocusto,
+    precovenda = excluded.precovenda,
+    ultimaalteracao = now(),
+    ultimaremarcacao = now()
+WHERE 
+    glb.produtogradeprecogrupo.precovenda <> excluded.precovenda
+    OR glb.produtogradeprecogrupo.precocusto <> excluded.precocusto
 """
 
 SQL_FRETE = """
@@ -898,32 +911,36 @@ from
 persistencia as (
 
 
-	insert into 
-	  ecode.preco_customedio 
-	  (idfilial, idproduto, idgradex, idgradey, custo_calc_unit, vlr_icms_st_recup_calc, vlr_icms_proprio_entrada_unit, origem_reg) 
-	
-	select 
-	  customedio.* 
-	from 
-	  customedio customedio
-	  left join ecode.preco_customedio preco_customedio on 
-	  	customedio.idfilial = preco_customedio.idfilial
-	  	and customedio.idproduto = preco_customedio.idproduto
-	  	and customedio.idgradex = preco_customedio.idgradex
-	  	and customedio.idgradey = preco_customedio.idgradey
-	where 
-	   (coalesce(customedio.custo_calc_unit,0) <> coalesce(preco_customedio.custo_calc_unit,0)
-	   or coalesce(customedio.vlr_icms_st_recup_calc,0) <> coalesce(preco_customedio.vlr_icms_st_recup_calc,0)
-	   or coalesce(customedio.vlr_icms_proprio_entrada_unit,0) <> coalesce(preco_customedio.vlr_icms_proprio_entrada_unit,0))
-	  
-	on conflict 
-	  (idfilial, idproduto, idgradex, idgradey)
-	do update set
-	  custo_calc_unit = excluded.custo_calc_unit,
-	  vlr_icms_st_recup_calc = excluded.vlr_icms_st_recup_calc, 
-	  vlr_icms_proprio_entrada_unit = excluded.vlr_icms_proprio_entrada_unit, 
-	  origem_reg = excluded.origem_reg,
-	  created_at = now()
+INSERT INTO ecode.preco_customedio (
+    idfilial, idproduto, idgradex, idgradey,
+    custo_calc_unit, vlr_icms_st_recup_calc,
+    vlr_icms_proprio_entrada_unit, origem_reg
+)
+SELECT 
+    customedio.*
+FROM 
+    customedio customedio
+LEFT JOIN ecode.preco_customedio preco_customedio 
+    ON customedio.idfilial = preco_customedio.idfilial
+   AND customedio.idproduto = preco_customedio.idproduto
+   AND customedio.idgradex = preco_customedio.idgradex
+   AND customedio.idgradey = preco_customedio.idgradey
+WHERE 
+    coalesce(customedio.custo_calc_unit,0) <> coalesce(preco_customedio.custo_calc_unit,0)
+ OR coalesce(customedio.vlr_icms_st_recup_calc,0) <> coalesce(preco_customedio.vlr_icms_st_recup_calc,0)
+ OR coalesce(customedio.vlr_icms_proprio_entrada_unit,0) <> coalesce(preco_customedio.vlr_icms_proprio_entrada_unit,0)
+
+ON CONFLICT (idfilial, idproduto, idgradex, idgradey)
+DO UPDATE SET
+    custo_calc_unit = EXCLUDED.custo_calc_unit,
+    vlr_icms_st_recup_calc = EXCLUDED.vlr_icms_st_recup_calc,
+    vlr_icms_proprio_entrada_unit = EXCLUDED.vlr_icms_proprio_entrada_unit,
+    origem_reg = EXCLUDED.origem_reg,
+    created_at = now()
+WHERE 
+    coalesce(EXCLUDED.custo_calc_unit,0) <> coalesce(preco_customedio.custo_calc_unit,0)
+ OR coalesce(EXCLUDED.vlr_icms_st_recup_calc,0) <> coalesce(preco_customedio.vlr_icms_st_recup_calc,0)
+ OR coalesce(EXCLUDED.vlr_icms_proprio_entrada_unit,0) <> coalesce(preco_customedio.vlr_icms_proprio_entrada_unit,0)
 	  
 	returning 'atualizado'
 

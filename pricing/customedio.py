@@ -1,7 +1,9 @@
 """Módulo de precificação e criação do multi-grupo preço MM."""
-from diskcache import Cache
+from queue import Queue, Empty
 import psycopg
 from psycopg.rows import dict_row
+from pricing.pool_conn import pool
+from pricing.utils.log import logger
 from pricing.sql import (
     SQL_LOAD_PRODUTO_FILIAL,
     SQL_GET_CUST_MEDIO,
@@ -10,29 +12,23 @@ from pricing.sql import (
     SQL_UPSERT_CUSTOMEDIO
     )
 
+c_log = Queue()
 class CustoMedio:
 
     """Criando custos médios para precificação"""
-
-    __URL = '/home/ecode/Python/MM/cache'
-
-    def __init__(self, pool, logger):
+    def __init__(self):
         """Iniciando conexão"""
         self._filiais: list = []
         self._remarcacao: list = []
-        self._pool = pool
-        self._logger = logger
-        self._logger.info("CustoMedio")
-        self._cache = Cache(self.__URL)
-        self._cache.clear()
+        # logger.info("CustoMedio")
         self._load_filiais_precificar()
         self._load_produtos_filial()
 
     def _setting_error(self, local, error) -> None:
-        self._logger.error(f"{str(error)} {local}")
+        logger.error("%s - %s", error, local)
 
     def _load_filiais_precificar(self) -> None:
-        with self._pool.connection() as conn:
+        with pool.connection() as conn:
             with conn.cursor(row_factory=dict_row) as cur:
                 with conn.transaction():
                     cur.execute(SQL_GET_FILIAIS_PRECIFICAR, prepare=False)
@@ -49,9 +45,12 @@ class CustoMedio:
             if not custo_medio:
                 return False
             params.update({'atualizar' : True})
-            if (params.get('custo_calc_unit',0) == custo_medio.get('custo_calc_unit',0) and
-                params.get('vlr_icms_st_recup_calc',0) == custo_medio.get('vlr_icms_st_recup_calc',0) and
-                params.get('vlr_icms_proprio_entrada_unit',0) == custo_medio.get('vlr_icms_proprio_entrada_unit',0)):
+            validacao = [
+                params.get('custo_calc_unit',0) == custo_medio.get('custo_calc_unit',0),
+                params.get('vlr_icms_st_recup_calc',0) == custo_medio.get('vlr_icms_st_recup_calc',0),
+                params.get('vlr_icms_proprio_entrada_unit',0) == custo_medio.get('vlr_icms_proprio_entrada_unit',0)
+            ]
+            if all(validacao):
                 params.update({'atualizar' : False})
             params |= custo_medio
             return True
@@ -61,11 +60,11 @@ class CustoMedio:
 
     def _load_custo_medio_remarcacao(self):
         try:
-            with self._pool.connection() as conn:
+            with pool.connection() as conn:
                 with conn.cursor(row_factory=dict_row) as cur:
-                    with conn.transaction():
-                        cur.execute(SQL_GET_CUST_MEDIO_REMARCACAO, prepare=False)
-                        self._remarcacao = cur.fetchall()
+                    cur.execute(SQL_GET_CUST_MEDIO_REMARCACAO, prepare=False)
+                    self._remarcacao = cur.fetchall()
+                conn.commit()
         except psycopg.Error as e:
             self._setting_error('_load_custo_medio_remarcacao', e)
             return None
@@ -85,11 +84,25 @@ class CustoMedio:
                     }
         return None
 
-    def _upsert_customedio(self, conn, params):
+    def _upsert_customedio(self):
         try:
-            dados = conn.execute(SQL_UPSERT_CUSTOMEDIO, params, prepare=False).fetchone()
-            conn.commit()
-            return dados
+            with pool.connection() as conn:
+                with conn.cursor() as cur:
+                    n = 1
+                    while not c_log.empty():
+                        try:
+                            values = c_log.get_nowait()
+                            cur.execute(SQL_UPSERT_CUSTOMEDIO,
+                                        values,
+                                        prepare=False)
+                            c_log.task_done()
+                            if n % 200 == 0:
+                                # logger.info("Persist %s", c_log.qsize())
+                                conn.commit()
+                            n += 1
+                        except Empty:
+                            break
+                conn.commit()
         except (psycopg.Error,
                 psycopg.errors.DuplicatePreparedStatement,
                 psycopg.errors.InvalidSqlStatementName) as e:
@@ -98,11 +111,10 @@ class CustoMedio:
 
     def _load_produtos_filial(self):
         for idfilial in self._filiais:
-            with self._pool.connection() as conn:
-                conn.autocommit = False
+            with pool.connection() as conn:
                 with conn.cursor(row_factory=dict_row) as cur:
                     cur.execute(SQL_LOAD_PRODUTO_FILIAL, {'idfilial' : idfilial}, prepare=False)
                     for c in cur:
-                        if not c:
-                            continue
-                        self._upsert_customedio(conn, c)
+                        if isinstance(c, dict):
+                            c_log.put(c)
+        self._upsert_customedio()

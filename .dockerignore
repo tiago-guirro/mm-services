@@ -4,3 +4,4 @@
 cache/*
 pricing/__pycache__/*
 teste.py
+deque/
