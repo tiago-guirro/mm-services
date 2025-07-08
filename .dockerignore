@@ -2,6 +2,8 @@
 .venv/*
 .gitignore
 cache/*
-pricing/__pycache__/*
 teste.py
 deque/
+__pycache__/
+**/__pycache__/
+*.py[cod]

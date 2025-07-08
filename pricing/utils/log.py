@@ -1,5 +1,6 @@
 """Criando estrutura de log"""
 import sys
+import os
 import logging
 
 logging.basicConfig(
@@ -10,3 +11,12 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+
+def log_notify(message):
+    """Enviando mensagem somente local"""
+    if bool(os.getenv('LOG','False')):
+        logger.info(message)
+
+def log_error(message):
+    """Enviando mensagem de erros"""
+    logger.error(message)

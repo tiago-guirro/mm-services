@@ -3,7 +3,7 @@ from queue import Queue, Empty
 import psycopg
 from psycopg.rows import dict_row
 from pricing.pool_conn import pool
-from pricing.utils.log import logger
+from pricing.utils.log import log_error, log_notify
 from pricing.sql import (
     SQL_LOAD_PRODUTO_FILIAL,
     SQL_GET_CUST_MEDIO,
@@ -20,12 +20,8 @@ class CustoMedio:
         """Iniciando conexão"""
         self._filiais: list = []
         self._remarcacao: list = []
-        # logger.info("CustoMedio")
         self._load_filiais_precificar()
         self._load_produtos_filial()
-
-    def _setting_error(self, local, error) -> None:
-        logger.error("%s - %s", error, local)
 
     def _load_filiais_precificar(self) -> None:
         with pool.connection() as conn:
@@ -55,7 +51,7 @@ class CustoMedio:
             params |= custo_medio
             return True
         except psycopg.Error as e:
-            self._setting_error('_load_custo_medio_funcao', e)
+            log_error(f"_load_custo_medio_funcao {e}")
             return False
 
     def _load_custo_medio_remarcacao(self):
@@ -65,10 +61,10 @@ class CustoMedio:
                     cur.execute(SQL_GET_CUST_MEDIO_REMARCACAO, prepare=False)
                     self._remarcacao = cur.fetchall()
                 conn.commit()
-        except psycopg.Error as e:
-            self._setting_error('_load_custo_medio_remarcacao', e)
             return None
-        return None
+        except psycopg.Error as e:
+            log_error(f"_load_custo_medio_remarcacao {e}")
+            return None
 
     def _pesquisa_custo_medio_remarcacao(self, idfilial, idproduto, idgradex, idgradey):
         if idfilial not in (10050,10001,10083):
@@ -97,7 +93,7 @@ class CustoMedio:
                                         prepare=False)
                             c_log.task_done()
                             if n % 200 == 0:
-                                # logger.info("Persist %s", c_log.qsize())
+                                log_notify(f"Persist {c_log.qsize()}")
                                 conn.commit()
                             n += 1
                         except Empty:
@@ -106,8 +102,7 @@ class CustoMedio:
         except (psycopg.Error,
                 psycopg.errors.DuplicatePreparedStatement,
                 psycopg.errors.InvalidSqlStatementName) as e:
-            conn.rollback()
-            self._setting_error('_upsert_customedio', e)
+            log_error(f"_upsert_customedio {e}")
 
     def _load_produtos_filial(self):
         for idfilial in self._filiais:

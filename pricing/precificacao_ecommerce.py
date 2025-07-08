@@ -1,7 +1,6 @@
 """Gestao precificacao ecommerce"""
 from typing import Any
 import hashlib
-import time
 from collections import defaultdict
 from queue import Queue, Empty
 from decimal import Decimal
@@ -21,16 +20,14 @@ from pricing.sql import (INSERT_LOG_PRECIFICACAO,
                          INSERT_PRODUTOGRADEPRECOGRUPO,
                          SQL_LOAD_PRECOS_TOTAL)
 from pricing.utils.params import VINCULO, PROPORCAO_GERAL
-from pricing.utils.log import logger
+from pricing.utils.log import log_error, log_notify
 from pricing.pool_conn import pool
 from pricing.utils.calculos import round_salles, round_up, round_two
-
 
 def gerar_hash(chave: str) -> str:
     """Gerando hash"""
     return hashlib.sha256(chave.encode('utf-8')).hexdigest()
 
-# cache.evict(tag='Ecommerce')
 w_precos = Queue()
 w_log = Queue()
 dual = set()
@@ -68,13 +65,16 @@ class Operacoes:
 
     def get_preco_comparacao(self):
         """Retornando dados comparação"""
+        if len(preco_comparacao) > 0:
+            return
+        contents: dict = {}
         try:
-            if len(preco_comparacao) > 0:
-                return
-            contents: dict = {}
+            with lock:
+                if len(preco_comparacao) > 0:
+                    return
             with pool.connection() as conn:
                 with conn.cursor(row_factory=dict_row) as cur:
-                    cur.execute(SQL_LOAD_PRECOS_TOTAL, contents)
+                    cur.execute(SQL_LOAD_PRECOS_TOTAL, contents, prepare=False)
                     for p in cur:
                         campos = [p.get('idgrupopreco'),
                                 p.get('idproduto'),
@@ -86,14 +86,12 @@ class Operacoes:
                         key = '_'.join(str(c) if c is not None else '' for c in campos)
                         preco_comparacao.add(gerar_hash(key))
         except psycopg.Error as e:
-            logger.error('get_customedio %s', e)
-            time.sleep(5)
-            self.get_preco_comparacao()
+            log_error(f"get_customedio {e}")
 
     def insert_many(self):
         """Inserindo lote de dados"""
         try:
-            # logger.info("Iniciando Gravação: %s", w_precos.qsize())
+            log_notify(f"Iniciando Gravação: {w_precos.qsize()}")
             with pool.connection() as conn:
                 with conn.cursor() as cur:
                     controle = 0
@@ -111,7 +109,7 @@ class Operacoes:
                                 for _ in range(0,controle):
                                     w_precos.task_done()
                                     w_log.task_done()
-                                # logger.info("Gravando: %s %s",controle,w_precos.qsize())
+                                log_notify(f"Gravando: {controle} {w_precos.qsize()}")
                                 safe.clear()
                                 controle = 0
                         except Empty:
@@ -120,13 +118,12 @@ class Operacoes:
                 for _ in range(0,controle):
                     w_precos.task_done()
                     w_log.task_done()
-                    # logger.info("Gravando: %s %s",controle,w_precos.qsize())
+                    log_notify(f"Gravando: {controle} {w_precos.qsize()}")
                 safe.clear()
         except (PoolTimeout,
                 psycopg.errors.DuplicatePreparedStatement,
                 psycopg.Error) as e:
-            conn.rollback()
-            logger.error("Error: %s.", e)
+            log_error(f"Error {e}")
             for s in safe:
                 w_precos.put(s[0])
                 w_log.put(s[1])
@@ -134,30 +131,29 @@ class Operacoes:
 
     def _execute_data(self, sql, **contents) -> list:
         """Retornando relação uf vendas"""
-        try:
-            caller = inspect.stack()[1].function
-            key = caller + "_"+"_".join(str(x) for x in contents.values())
+        caller = inspect.stack()[1].function
+        key = caller + "_"+"_".join(str(x) for x in contents.values())
+        val: Any = cache.get(key)
+        if key in cache and isinstance(val, list):
+            return val
+        with lock:
             val: Any = cache.get(key)
             if key in cache and isinstance(val, list):
                 return val
-            with lock:
-                val: Any = cache.get(key)
-                if key in cache and isinstance(val, list):
-                    return val
-                # logger.info("Carregando dados: %s", key)
-                with pool.connection() as conn:
-                    with conn.cursor(row_factory=dict_row) as cur:
-                        cur.execute(sql, contents)
-                        to_cache_ = cur.fetchall()
-                        cache.set(key, to_cache_, tag='Ecommerce',expire=self._expires)
-                    conn.commit()
+        try:
+            log_notify(f"Carregando dados: {key}")
+            with pool.connection() as conn:
+                with conn.cursor(row_factory=dict_row) as cur:
+                    cur.execute(sql, contents, prepare=False)
+                    to_cache_ = cur.fetchall()
+                    cache.set(key, to_cache_, tag='Ecommerce',expire=self._expires)
+                conn.commit()
                 return to_cache_
         except (PoolTimeout, psycopg.errors.DuplicatePreparedStatement) as e:
-            logger.error("Erro, aguardando 60s: %s.", e)
-            time.sleep(60)
-            return self._execute_data(sql, **contents)
+            log_error(f"Erro, PoolTimeout ou DuplicatePreparedStatement: {e}")
+            return []
         except psycopg.Error as e:
-            logger.error("psycopg.Error: %s.", e)
+            log_error(f"psycopg.Error: {e}")
             return []
 
 class EcommerceUnique:
@@ -165,11 +161,11 @@ class EcommerceUnique:
     def __init__(self) -> None:
         self.ops = Operacoes()
         self._historico_venda = self._estrutura_regra()
-        # logger.info('Histórico carregado.')
+        log_notify('Histórico carregado.')
         self._regra = self.ops.get_regra()
-        # logger.info('Regra carregada.')
+        log_notify(f"Regra carregada ({len(self._regra)}).")
         self.ops.get_preco_comparacao()
-        # logger.info('Comparação carregada.')
+        log_notify('Comparação carregada.')
 
     def modelo_gravacao_preco(self, fila, **k) -> None:
         """Retornando model"""
@@ -191,23 +187,29 @@ class EcommerceUnique:
     def montagem_regra(self, idgrupopreco):
         """Montando regra de preços"""
         for regra, produtos in self._produto_listagem(idgrupopreco):
+
             key_historico = VINCULO.get(regra.get('idgrupopreco'), 'GERAL')
             log = f"Grupo: {regra.get('idgrupopreco')} | "
             log += f"Classificacao: {regra.get('classificacao')} | "
             log += f"Seller: {key_historico} | "
             log += f"Total produtos: {len(produtos)}"
-            # logger.info(log)
             historico = self._historico_venda.get(key_historico, PROPORCAO_GERAL)
+
+            log_notify(log)
+
             for produto in produtos:
+
                 key = f"{regra.get('idgrupopreco')}_"
                 key += f"{produto.get('idproduto')}_"
                 key += f"{produto.get('idgradex')}_"
                 key += str(produto.get('idgradey'))
+
                 if key in dual:
-                    print('chega dual')
                     continue
                 dual.add(key)
+
                 hist = self._pos_init(produto.get('idproduto'), historico)
+
                 precos = []
                 icms = []
                 for h in hist:
@@ -216,21 +218,25 @@ class EcommerceUnique:
                     idx -= h.get("pis_cofins")
                     idx -= regra.get("margem")
                     idx -= regra.get("adicional")
-                    idx /= 100
+                    idx /= Decimal(100)
                     custo_medio = produto.get("customedio")
                     preco = custo_medio / idx
                     preco_absoluto = round_up(preco * h.get("pcto"))
                     icms.append((h.get("icms_destino") or h.get(
                         "icms_origem")) * h.get("pcto"))
                     precos.append(preco_absoluto)
+
                 preco_final = round_salles(sum(precos) / Decimal(100))
                 icms_final = round_two(sum(icms) / Decimal(100))
+
                 key += f"_{preco_final}_"
                 key += f"{regra.get("margem")}_"
                 key += f"{icms_final}"
                 key_ = gerar_hash(key)
+
                 if key_ in preco_comparacao:
                     continue
+
                 self.modelo_gravacao_preco(
                     'log',
                     idfilial=regra.get('idfilial'),
@@ -249,6 +255,7 @@ class EcommerceUnique:
                     precovenda=preco_final,
                     regra=key_historico
                 )
+
                 self.modelo_gravacao_preco(
                     'preco',
                     idproduto=produto.get('idproduto'),
@@ -258,6 +265,9 @@ class EcommerceUnique:
                     precocusto=produto.get('customedio'),
                     precovenda=preco_final
                 )
+
+            log_notify(f"--- Fim regra ({w_precos.qsize()}) ---")
+
         if w_precos.qsize() > 0:
             self.ops.insert_many()
 
@@ -311,9 +321,9 @@ def execucao_multi():
     e = EcommerceUnique()
     with ThreadPoolExecutor(max_workers=4) as executor:
         for grupo in chunker(lista_ids, 4):
-            # logger.info("🚀 Iniciando grupo: %s", grupo)
+            log_notify(f"🚀 Iniciando grupo: {grupo}")
             futures = [executor.submit(e.montagem_regra, id_) for id_ in grupo]
             wait(futures)
-            # logger.info("✅ Grupo %s finalizado", grupo)
+            log_notify("✅ Grupo {grupo} finalizado")
         preco_comparacao.clear()
         dual.clear()

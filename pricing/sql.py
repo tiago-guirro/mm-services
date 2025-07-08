@@ -317,13 +317,16 @@ select
   lp.idgradey,
   lp.margem,
   lp.frete,
-  lp.icms,
-  round(lp.precovenda,2) as precovenda 
+  trunc(lp.icms,2) as icms,
+  round(lp.precovenda,2) as precovenda,
+  trunc(lp.pis,4) as pis,
+  trunc(lp.cofins,4) as cofins 
 from 
   ecode.log_precificacao lp 
 where
   coalesce(lp.precovenda,0) > 0
-order by idgrupopreco, idproduto , idgradex , idgradey
+order by 
+  idgrupopreco, idproduto , idgradex , idgradey
 """
 
 SQL_LOAD_UF = """

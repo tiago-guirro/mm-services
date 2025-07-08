@@ -10,14 +10,53 @@ from pricing.search import atualizacao_search
 from pricing.customedio import CustoMedio
 from pricing.promocao import sales_disable
 from pricing.precificacao_ecommerce import execucao_multi
-timezone = timezone('America/Sao_Paulo')
-logger.info('start scheduler mm_worker!')
+from pricing.utils.cache import cache
+
+# Sempre que feito o recarregamento do processo, zerar os cache base fiscal
+cache.evict(tag='Atacado')
+cache.evict(tag='Ecommerce')
+
+tmzn = timezone('America/Sao_Paulo')
 scheduler = BlockingScheduler()
-scheduler.add_job(sales_disable,'cron', hour='7-20', minute='*', timezone=timezone)
-scheduler.add_job(CustoMedio, 'cron', hour='7-19', minute="*/10", timezone=timezone)
-scheduler.add_job(Precificacao, 'cron', day_of_week='mon-sat', hour='7-19', minute="*/15", timezone=timezone)
-scheduler.add_job(atualizacao_search, 'cron', day_of_week='mon-fri', hour=20, minute=0, timezone=timezone)
-scheduler.add_job(execucao_multi, 'cron', hour='7-19', minute="*/30", timezone=timezone)
+
+scheduler.add_job(sales_disable,
+                  'cron',
+                  hour='7-20',
+                  minute='*',
+                  timezone=tmzn,
+                  max_instances=1,
+                  id="Desabilitar_Promocao")
+scheduler.add_job(CustoMedio,
+                  'cron',
+                  hour='7-19',
+                  minute="*/10",
+                  timezone=tmzn,
+                  max_instances=1,
+                  id="Atualizar_Custo_Medio")
+scheduler.add_job(Precificacao,
+                  'cron',
+                  day_of_week='mon-sat',
+                  hour='7-19',
+                  minute="*/15",
+                  timezone=tmzn,
+                  max_instances=1,
+                  id="Precificacao_Atacado")
+scheduler.add_job(atualizacao_search,
+                  'cron',
+                  day_of_week='mon-fri',
+                  hour=20,
+                  minute=0,
+                  timezone=tmzn,
+                  max_instances=1,
+                  id="Atualizacao_Pesquisa")
+scheduler.add_job(execucao_multi,
+                  'cron',
+                  hour='7-19',
+                  minute="*/30",
+                  timezone=tmzn,
+                  max_instances=1,
+                  id="Precificacao_Ecommerce")
+
 try:
     scheduler.start()
 except (KeyboardInterrupt, SystemExit):

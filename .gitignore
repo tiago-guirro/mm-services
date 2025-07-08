@@ -2,4 +2,6 @@
 venv/
 cache/
 deque/
-pricing/__pycache__/
+__pycache__/
+**/__pycache__/
+*.py[cod]
