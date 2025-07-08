@@ -13,8 +13,8 @@ from pricing.precificacao_ecommerce import execucao_multi
 from pricing.utils.cache import cache
 
 # Sempre que feito o recarregamento do processo, zerar os cache base fiscal
-cache.evict(tag='Atacado')
-cache.evict(tag='Ecommerce')
+# cache.evict(tag='Atacado')
+# cache.evict(tag='Ecommerce')
 
 tmzn = timezone('America/Sao_Paulo')
 scheduler = BlockingScheduler()
