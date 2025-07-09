@@ -1,6 +1,7 @@
 """Módulo de precificação e criação do multi-grupo preço MM."""
+
 import sys
-import traceback
+import os
 from pytz import timezone
 from apscheduler.schedulers.blocking import BlockingScheduler
 from pricing.utils.log import logger
@@ -12,9 +13,12 @@ from pricing.promocao import sales_disable
 from pricing.precificacao_ecommerce import execucao_multi
 from pricing.utils.cache import cache
 
-# Sempre que feito o recarregamento do processo, zerar os cache base fiscal
-# cache.evict(tag='Atacado')
-# cache.evict(tag='Ecommerce')
+# Ao reiniciar o processo (como em modo de desenvolvimento),
+# limpe explicitamente os caches relacionados à base fiscal
+# para evitar reutilização de dados obsoletos.
+if not os.getenv('LOG'):
+    cache.evict(tag='Atacado')   # Remove dados em cache para o canal Atacado
+    cache.evict(tag='Ecommerce') # Remove dados em cache para o canal Ecommerce
 
 tmzn = timezone('America/Sao_Paulo')
 scheduler = BlockingScheduler()
@@ -61,9 +65,8 @@ try:
     scheduler.start()
 except (KeyboardInterrupt, SystemExit):
     pool.close()
-    sys.exit(1)
+    sys.exit(0)
 except Exception as e: # pylint: disable=broad-exception-caught
     pool.close()
     logger.error(e)
-    logger.error(traceback.format_exc())
-    sys.exit(0)
+    sys.exit(1)
