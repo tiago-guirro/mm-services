@@ -5,3 +5,5 @@ deque/
 __pycache__/
 **/__pycache__/
 *.py[cod]
+__pycache__/
+*.pyc

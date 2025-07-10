@@ -80,9 +80,9 @@ class Operacoes:
                                 p.get('idproduto'),
                                 p.get('idgradex'),
                                 p.get('idgradey'),
-                                p.get('precovenda'),
-                                p.get('margem'),
-                                p.get('icms')]
+                                Decimal(p.get('precovenda',0)),
+                                Decimal(p.get('margem',0)),
+                                Decimal(p.get('icms',0))]
                         key = '_'.join(str(c) if c is not None else '' for c in campos)
                         preco_comparacao.add(gerar_hash(key))
         except psycopg.Error as e:
@@ -196,6 +196,9 @@ class EcommerceUnique:
             historico = self._historico_venda.get(key_historico, PROPORCAO_GERAL)
 
             for produto in produtos:
+                
+                if 73439 != produto.get('idproduto'):
+                    continue
 
                 key = f"{regra.get('idgrupopreco')}_"
                 key += f"{produto.get('idproduto')}_"
@@ -228,8 +231,9 @@ class EcommerceUnique:
                 icms_final = round_two(sum(icms) / Decimal(100))
 
                 key += f"_{preco_final}_"
-                key += f"{regra.get("margem")}_"
+                key += f"{Decimal(regra.get("margem",0))}_"
                 key += f"{icms_final}"
+
                 key_ = gerar_hash(key)
 
                 if key_ in preco_comparacao:
