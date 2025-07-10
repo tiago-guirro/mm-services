@@ -2,13 +2,16 @@ APScheduler==3.11.0
 astroid==3.3.9
 dill==0.3.9
 diskcache==5.6.3
+hiredis==3.2.1
 isort==6.0.1
 mccabe==0.7.0
 platformdirs==4.3.6
 psycopg==3.2.5
 psycopg-binary==3.2.5
 psycopg-pool==3.2.6
+pylint==3.3.5
 pytz==2025.2
+redis==6.2.0
 tomlkit==0.13.2
 typing_extensions==4.12.2
 tzlocal==5.3.1

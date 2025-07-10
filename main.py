@@ -1,7 +1,6 @@
 """Módulo de precificação e criação do multi-grupo preço MM."""
 
 import sys
-import os
 from pytz import timezone
 from apscheduler.schedulers.blocking import BlockingScheduler
 from pricing.utils.log import logger
@@ -11,18 +10,9 @@ from pricing.search import atualizacao_search
 from pricing.customedio import CustoMedio
 from pricing.promocao import sales_disable
 from pricing.precificacao_ecommerce import execucao_multi
-from pricing.utils.cache import cache
-
-# Ao reiniciar o processo (como em modo de desenvolvimento),
-# limpe explicitamente os caches relacionados à base fiscal
-# para evitar reutilização de dados obsoletos.
-if not os.getenv('LOG'):
-    cache.evict(tag='Atacado')   # Remove dados em cache para o canal Atacado
-    cache.evict(tag='Ecommerce') # Remove dados em cache para o canal Ecommerce
 
 tmzn = timezone('America/Sao_Paulo')
 scheduler = BlockingScheduler()
-
 scheduler.add_job(sales_disable,
                   'cron',
                   hour='7-20',

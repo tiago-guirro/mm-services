@@ -11,7 +11,7 @@ import inspect
 import psycopg
 from psycopg_pool import PoolTimeout
 from psycopg.rows import dict_row
-from pricing.utils.cache import cache
+from pricing.utils.cache_redis import cache as cache_redis
 from pricing.query.ecommerce_produtos import SQL as sql_produtos
 from pricing.query.ecommerce_listando_processo import SQL as sql_processos
 from pricing.query.ecommerce_imposto import SQL as sql_impostos
@@ -129,24 +129,24 @@ class Operacoes:
                 w_log.put(s[1])
             safe.clear()
 
-    def _execute_data(self, sql, **contents) -> list:
+    def _execute_data(self, sql, **contents):
         """Retornando relação uf vendas"""
         caller = inspect.stack()[1].function
-        key = caller + "_"+"_".join(str(x) for x in contents.values())
-        val: Any = cache.get(key)
-        if key in cache and isinstance(val, list):
+        key = caller + ":"+":".join(str(x) for x in contents.values())
+        val: Any = cache_redis.get(key)
+        if val:
             return val
-        with lock:
-            val: Any = cache.get(key)
-            if key in cache and isinstance(val, list):
-                return val
         try:
+            with lock:
+                val: Any = cache_redis.get(key)
+                if val:
+                    return val
             log_notify(f"Carregando dados: {key}")
             with pool.connection() as conn:
                 with conn.cursor(row_factory=dict_row) as cur:
                     cur.execute(sql, contents, prepare=False)
                     to_cache_ = cur.fetchall()
-                    cache.set(key, to_cache_, tag='Ecommerce',expire=self._expires)
+                    cache_redis.set(key, to_cache_, ex=self._expires)
                 conn.commit()
                 return to_cache_
         except (PoolTimeout, psycopg.errors.DuplicatePreparedStatement) as e:
@@ -195,8 +195,6 @@ class EcommerceUnique:
             log += f"Total produtos: {len(produtos)}"
             historico = self._historico_venda.get(key_historico, PROPORCAO_GERAL)
 
-            log_notify(log)
-
             for produto in produtos:
 
                 key = f"{regra.get('idgrupopreco')}_"
@@ -206,24 +204,24 @@ class EcommerceUnique:
 
                 if key in dual:
                     continue
+
                 dual.add(key)
-
                 hist = self._pos_init(produto.get('idproduto'), historico)
-
                 precos = []
                 icms = []
+
                 for h in hist:
+                    icms_ = Decimal(h.get("icms_destino",0)) or Decimal(h.get("icms_origem",0))
                     idx = Decimal(100)
-                    idx -= h.get("icms_destino") or h.get("icms_origem")
-                    idx -= h.get("pis_cofins")
-                    idx -= regra.get("margem")
-                    idx -= regra.get("adicional")
+                    idx -= icms_
+                    idx -= Decimal(h.get("pis_cofins",0))
+                    idx -= Decimal(regra.get("margem",0))
+                    idx -= Decimal(regra.get("adicional",0))
                     idx /= Decimal(100)
-                    custo_medio = produto.get("customedio")
+                    custo_medio = Decimal(produto.get("customedio",0))
                     preco = custo_medio / idx
-                    preco_absoluto = round_up(preco * h.get("pcto"))
-                    icms.append((h.get("icms_destino") or h.get(
-                        "icms_origem")) * h.get("pcto"))
+                    preco_absoluto = round_up(preco * Decimal(h.get("pcto",0)))
+                    icms.append(icms_ * Decimal(h.get("pcto",0)))
                     precos.append(preco_absoluto)
 
                 preco_final = round_salles(sum(precos) / Decimal(100))
@@ -267,7 +265,6 @@ class EcommerceUnique:
                 )
 
             log_notify(f"--- Fim regra ({w_precos.qsize()}) ---")
-
         if w_precos.qsize() > 0:
             self.ops.insert_many()
 
@@ -324,6 +321,6 @@ def execucao_multi():
             log_notify(f"🚀 Iniciando grupo: {grupo}")
             futures = [executor.submit(e.montagem_regra, id_) for id_ in grupo]
             wait(futures)
-            log_notify("✅ Grupo {grupo} finalizado")
+            log_notify(f"✅ Grupo {grupo} finalizado")
         preco_comparacao.clear()
         dual.clear()

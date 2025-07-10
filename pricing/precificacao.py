@@ -1,5 +1,6 @@
 """Módulo de precificação e criação do multi-grupo preço MM."""
 from queue import Queue, Empty
+from typing import Any
 from decimal import Decimal
 import psycopg
 from psycopg.rows import dict_row
@@ -7,6 +8,7 @@ from psycopg_pool import PoolTimeout
 from pricing.utils.log import log_error, log_notify
 from pricing.pool_conn import pool
 from pricing.utils.cache import cache
+from pricing.utils.cache_redis import cache as cache_redis
 from pricing.utils.calculos import round_salles, round_two, round_up
 from pricing.query.atacado_imposto import SQL as sql_imposto
 from pricing.sql import (
@@ -53,12 +55,12 @@ class Operacoes:
                                 {"idproduto" : idproduto},
                                 prepare=False)
                     for item in cur:
-                        chave = f"i_{item.get('idfilial')}_"
-                        chave += f"{item.get('idgrupopreco')}_"
+                        chave = f"imposto:{item.get('idfilial')}:"
+                        chave += f"{item.get('idgrupopreco')}:"
                         chave += f"{item.get('idproduto')}"
                         for k_ in ['idproduto','idfilial','idgrupopreco']:
                             del item[k_]
-                        cache.set(chave, item, tag='Atacado')
+                        cache_redis.set(chave, item, ex=None)
                 conn.commit()
         except psycopg.Error as e:
             log_error(f"get_impostos {e}")
@@ -88,7 +90,7 @@ class Operacoes:
 
     def get_customedio_ajustado(self, **k) -> list:
         """Custo médio ajustado"""
-        # @cache.memoize(expire=60*60)
+        @cache.memoize(expire=60*10)
         def get_data(**kk):
             try:
                 with pool.connection() as conn:
@@ -170,7 +172,7 @@ class Precificacao:
 
     def get_frete_search(self, idgrupopreco, classificacao):
         """Coletando no cache os dados por produto"""
-        @cache.memoize(expire=60*12)
+        @cache.memoize(expire=60*10)
         def get_data(_idgrupopreco, _classificacao):
             for f in frete:
                 if not f.get('idgrupopreco') == _idgrupopreco:
@@ -183,20 +185,20 @@ class Precificacao:
 
     def get_calc_sales_price(self, idproduto: int, customedio: Decimal, rl: dict) -> Decimal | None:
         """Coletando no cache os dados por produto"""
-        chave = f"i_{rl.get('idfilial')}_{rl.get('idgrupopreco')}_{idproduto}"
-        if chave not in cache:
+        chave = f"imposto:{rl.get('idfilial')}:{rl.get('idgrupopreco')}:{idproduto}"
+        if not cache_redis.exists(chave):
             self.ops.get_impostos(idproduto)
-        impostos = cache.get(chave)
-        if not impostos or not isinstance(impostos,dict):
-            return None
-        icms_ = impostos.get('icms_origem',0)
-        if impostos.get('percentualdiferido',0) > 0:
-            diferido_ = Decimal(100) - impostos.get('percentualdiferido',Decimal(100))
+            if not cache_redis.exists(chave):
+                return None
+        impostos: Any = cache_redis.get(chave)
+        icms_ = Decimal(impostos.get('icms_origem',0))
+        if Decimal(impostos.get('percentualdiferido',0)) > Decimal(0):
+            diferido_ = Decimal(100) - Decimal(impostos.get('percentualdiferido',100))
             diferido_ /= Decimal(100)
             icms_ *= diferido_
-        pis_ = impostos.get('pis',0)
+        pis_ = Decimal(impostos.get('pis',0))
         pis_ -= pis_ * icms_ / Decimal(100)
-        cofins_ = impostos.get('cofins',0)
+        cofins_ = Decimal(impostos.get('cofins',0))
         cofins_ -= cofins_ * icms_ / Decimal(100)
         rl.update({"icms" : round_two(icms_)})
         rl.update({"pis" : round_up(pis_)})
@@ -254,9 +256,10 @@ class Precificacao:
                 key += f"{Decimal(rul.get('icms',0))}_"
                 key += f"{Decimal(rul.get('pis',0))}_"
                 key += f"{Decimal(rul.get('cofins',0))}"
+
                 if key in preco_comparacao:
                     continue
-                preco_comparacao.add(key)
+
                 totalizador += 1
                 w_log.put(
                     {

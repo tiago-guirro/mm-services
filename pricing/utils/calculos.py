@@ -1,7 +1,7 @@
 """Cálculos de preço com arredondamento específico"""
 from decimal import Decimal, ROUND_HALF_UP, ROUND_DOWN, getcontext
 
-getcontext().prec = 10
+getcontext().prec = 4
 
 def round_up(value: Decimal) -> Decimal:
     """
