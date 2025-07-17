@@ -291,7 +291,7 @@ class Precificacao:
 
                     }
                 )
-            log_notify(f"Total {rul.get('idgrupopreco')} {w_precos.qsize()}")
+            log_notify(f"Total {rul_o.get('idgrupopreco',0)} {w_precos.qsize()}")
         if w_precos.qsize() > 0:
             self.ops.insert_many()
 

@@ -78,7 +78,7 @@ left join ecode.preco_pessoa preco_pessoa
 	and preco_pessoa.situacao = 'Ativo'
 where 
   	base.situacao = 'Ativo'
-    and base.idgrupopreco between 1279 and 1303
+    and base.idgrupopreco between 1279 and 1399
 order by 
   base.idgrupopreco,
   base.idfilial,
