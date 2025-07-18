@@ -196,9 +196,6 @@ class EcommerceUnique:
             historico = self._historico_venda.get(key_historico, PROPORCAO_GERAL)
 
             for produto in produtos:
-                
-                if 73439 != produto.get('idproduto'):
-                    continue
 
                 key = f"{regra.get('idgrupopreco')}_"
                 key += f"{produto.get('idproduto')}_"
@@ -274,21 +271,28 @@ class EcommerceUnique:
 
     def _produto_listagem(self, idgrupopreco):
         for rule in self._regra:
-            if rule.get('idgrupopreco') != idgrupopreco:
+            try:
+                if rule.get('idgrupopreco') != idgrupopreco:
+                    continue
+                produtos = self.ops.get_produtos(**{
+                    "idfilial": rule.get('idfilialsaldo'),
+                    "ncm": rule.get('ncm'),
+                    "classificacao": rule.get('classificacao'),
+                    "origem": rule.get('origem'),
+                    "idmarca": rule.get('idmarca'),
+                    "idproduto": rule.get('idproduto'),
+                    "idgradex": rule.get('idgradex'),
+                    "idgradey": rule.get('idgradey')
+                })
+                if not produtos:
+                    raise ValueError('_produto_listagem: Vazio:')
+                yield rule, produtos
+            except (ValueError, KeyError) as e:
+                log_notify(e)
                 continue
-            produtos = self.ops.get_produtos(**{
-                "idfilial": rule.get('idfilialsaldo'),
-                "ncm": rule.get('ncm'),
-                "classificacao": rule.get('classificacao'),
-                "origem": rule.get('origem'),
-                "idmarca": rule.get('idmarca'),
-                "idproduto": rule.get('idproduto'),
-                "idgradex": rule.get('idgradex'),
-                "idgradey": rule.get('idgradey')
-            })
-            if len(produtos) == 0:
+            except Exception as e: # pylint: disable=W0703
+                log_notify(f'_produto_listagem: erro inesperado: {e}')
                 continue
-            yield rule, produtos
 
     def _pos_init(self, idproduto, regra):
         ufs_destino = [x['uf'] for x in regra]
