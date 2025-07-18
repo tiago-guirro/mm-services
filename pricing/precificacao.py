@@ -55,9 +55,9 @@ class Operacoes:
                                 {"idproduto" : idproduto},
                                 prepare=False)
                     for item in cur:
-                        chave = f"imposto:{item.get('idfilial')}:"
-                        chave += f"{item.get('idgrupopreco')}:"
-                        chave += f"{item.get('idproduto')}"
+                        chave = f"imposto:{int(item.get('idfilial',0))}:"
+                        chave += f"{int(item.get('idgrupopreco',0))}:"
+                        chave += f"{int(item.get('idproduto',0))}"
                         for k_ in ['idproduto','idfilial','idgrupopreco']:
                             del item[k_]
                         cache_redis.set(chave, item, ex=None)
@@ -67,6 +67,8 @@ class Operacoes:
 
     def get_preco_comparacao(self):
         """Retornando dados comparação"""
+        if preco_comparacao:
+            return
         try:
             with pool.connection() as conn:
                 with conn.cursor(row_factory=dict_row) as cur:
@@ -106,6 +108,10 @@ class Operacoes:
 
     def get_frete(self):
         """Load frete de toda rede"""
+        
+        if frete:
+            return
+        
         try:
             with pool.connection() as conn:
                 with conn.cursor(row_factory=dict_row) as cur:
@@ -185,7 +191,7 @@ class Precificacao:
 
     def get_calc_sales_price(self, idproduto: int, customedio: Decimal, rl: dict) -> Decimal | None:
         """Coletando no cache os dados por produto"""
-        chave = f"imposto:{rl.get('idfilial')}:{rl.get('idgrupopreco')}:{idproduto}"
+        chave = f"imposto:{int(rl.get('idfilial',0))}:{int(rl.get('idgrupopreco',0))}:{idproduto}"
         if not cache_redis.exists(chave):
             self.ops.get_impostos(idproduto)
             if not cache_redis.exists(chave):

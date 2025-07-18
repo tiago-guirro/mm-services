@@ -41,27 +41,27 @@ class Operacoes:
 
     def get_produtos(self, **argv):
         """Dados dos produtos"""
-        self._expires = 60 * 60
-        return self._execute_data(sql_produtos, **argv)
+        expires_ = 60 * 60
+        return self._execute_data(sql_produtos, expires_, **argv)
 
     def get_regra(self):
         """Regra da precificacao"""
-        self._expires = 60 * 60 * 24
-        return self._execute_data(sql_regra)
+        expires_ = 60 * 60 * 24
+        return self._execute_data(sql_regra, expires_)
 
     def get_impostos(self, *, uf_origem, idproduto) -> list:
         """Retornando base imposto"""
         contents: dict = {}
         contents.update({'uf_origem': uf_origem})
         contents.update({'idproduto': idproduto})
-        self._expires = None
-        return self._execute_data(sql_impostos, **contents)
+        expires_ = None
+        return self._execute_data(sql_impostos, expires_, **contents)
 
     def get_estrutura_uf_venda(self):
         """Retornando relação uf vendas"""
         contents: dict = {}
-        self._expires = 60 * 60 * 24 * 7
-        return self._execute_data(sql_processos, **contents)
+        expires_ = 60 * 60 * 24 * 7
+        return self._execute_data(sql_processos, expires_, **contents)
 
     def get_preco_comparacao(self):
         """Retornando dados comparação"""
@@ -129,24 +129,22 @@ class Operacoes:
                 w_log.put(s[1])
             safe.clear()
 
-    def _execute_data(self, sql, **contents):
+    def _execute_data(self, sql, ex=None, **contents) -> Any:
         """Retornando relação uf vendas"""
         caller = inspect.stack()[1].function
         key = caller + ":"+":".join(str(x) for x in contents.values())
-        val: Any = cache_redis.get(key)
-        if val:
-            return val
+        if cache_redis.exists(key):
+            return cache_redis.get(key)
         try:
             with lock:
-                val: Any = cache_redis.get(key)
-                if val:
-                    return val
+                if cache_redis.exists(key):
+                    return cache_redis.get(key)
             log_notify(f"Carregando dados: {key}")
             with pool.connection() as conn:
                 with conn.cursor(row_factory=dict_row) as cur:
                     cur.execute(sql, contents, prepare=False)
                     to_cache_ = cur.fetchall()
-                    cache_redis.set(key, to_cache_, ex=self._expires)
+                    cache_redis.set(key, to_cache_, ex=ex)
                 conn.commit()
                 return to_cache_
         except (PoolTimeout, psycopg.errors.DuplicatePreparedStatement) as e:
@@ -274,6 +272,7 @@ class EcommerceUnique:
             try:
                 if rule.get('idgrupopreco') != idgrupopreco:
                     continue
+                
                 produtos = self.ops.get_produtos(**{
                     "idfilial": rule.get('idfilialsaldo'),
                     "ncm": rule.get('ncm'),
