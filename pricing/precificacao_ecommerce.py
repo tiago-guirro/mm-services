@@ -193,7 +193,10 @@ class EcommerceUnique:
             log += f"Total produtos: {len(produtos)}"
             historico = self._historico_venda.get(key_historico, PROPORCAO_GERAL)
 
-            for produto in produtos:
+            for pd in produtos:
+                produto = pd.copy()
+                custo_medio = round_two(Decimal(produto.get("customedio",0)))
+                vlr_icms_st_recup_calc = round_two(Decimal(produto.get("vlr_icms_st_recup_calc",0)))
 
                 key = f"{regra.get('idgrupopreco')}_"
                 key += f"{produto.get('idproduto')}_"
@@ -216,8 +219,11 @@ class EcommerceUnique:
                     idx -= Decimal(regra.get("margem",0))
                     idx -= Decimal(regra.get("adicional",0))
                     idx /= Decimal(100)
-                    custo_medio = Decimal(produto.get("customedio",0))
-                    preco = custo_medio / idx
+                    preco = round_two(custo_medio / idx)
+                    # Voltando o vlr_icms_st_recup_calc pois para o ecommerce
+                    # Não pode se remover automático
+                    if (h.get("uf") == h.get("uf_origem") and h.get("uf") == "PR"):
+                        preco = round_two((custo_medio + vlr_icms_st_recup_calc) / idx)
                     preco_absoluto = round_up(preco * Decimal(h.get("pcto",0)))
                     icms.append(icms_ * Decimal(h.get("pcto",0)))
                     precos.append(preco_absoluto)
@@ -272,7 +278,7 @@ class EcommerceUnique:
             try:
                 if rule.get('idgrupopreco') != idgrupopreco:
                     continue
-                
+
                 produtos = self.ops.get_produtos(**{
                     "idfilial": rule.get('idfilialsaldo'),
                     "ncm": rule.get('ncm'),

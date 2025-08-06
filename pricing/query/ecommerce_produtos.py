@@ -22,6 +22,7 @@ select
   produto.idsituacaoorigem,
   departamento.classificacao,
   departamento.iddepartamento,
+  coalesce(customedio.vlr_icms_st_recup_calc,0) as vlr_icms_st_recup_calc,
   first_value(
 case 
   	when %(idfilial)s = 10083 

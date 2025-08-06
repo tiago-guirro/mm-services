@@ -108,10 +108,8 @@ class Operacoes:
 
     def get_frete(self):
         """Load frete de toda rede"""
-        
         if frete:
             return
-        
         try:
             with pool.connection() as conn:
                 with conn.cursor(row_factory=dict_row) as cur:
