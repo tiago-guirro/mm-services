@@ -16,6 +16,7 @@ filiais as (
 	  inner join glb.cidade cidade using (idcidade)
 	where 
 	  multi_grupo.situacao = 'Ativo'
+      and cidade.uf = 'PR'
 ) ,
 agrupamento as (
 	select
@@ -54,11 +55,7 @@ select
 	idproduto,
 	idfilial,
     idgrupopreco,
-	case 
-		when uf_origem = 'PB' then
-			case when uf_origem = uf_destino then 4.2 else 1.2 end
-		else icms_origem
-	end icms_origem,
+	icms_origem,
 	pis,
  cofins,
 	percentualbase,

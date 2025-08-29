@@ -189,12 +189,30 @@ class Precificacao:
 
     def get_calc_sales_price(self, idproduto: int, customedio: Decimal, rl: dict) -> Decimal | None:
         """Coletando no cache os dados por produto"""
-        chave = f"imposto:{int(rl.get('idfilial',0))}:{int(rl.get('idgrupopreco',0))}:{idproduto}"
-        if not cache_redis.exists(chave):
-            self.ops.get_impostos(idproduto)
+        def _impostos() -> Any:
+            chave = f"imposto:{int(rl.get('idfilial',0))}:{int(rl.get('idgrupopreco',0))}:{int(idproduto)}"
+            if cache_redis.exists(chave):
+                return cache_redis.get(chave)
+            # Saindo do Paraná, ler bases do sistema.
+            if rl.get('idfilial') in (10001,10050,10083):
+                self.ops.get_impostos(idproduto)
+            else:
+                cache_redis.set(chave,
+                                {"idproduto": idproduto,
+                                 "idfilial": rl.get('idfilial'),
+                                 "idgrupopreco": rl.get('idgrupopreco'),
+                                 "icms_origem": rl.get('icms', Decimal(0)),
+                                 "pis": rl.get('pis', Decimal(0)),
+                                 "cofins": rl.get('cofins', Decimal(0)),
+                                 "percentualbase": Decimal(100),
+                                 "percentualdiferido": Decimal(0)}, ex=None)
             if not cache_redis.exists(chave):
                 return None
-        impostos: Any = cache_redis.get(chave)
+            return cache_redis.get(chave)
+
+        impostos: Any = _impostos()
+        if not impostos:
+            return None
         icms_ = Decimal(impostos.get('icms_origem',0))
         if Decimal(impostos.get('percentualdiferido',0)) > Decimal(0):
             diferido_ = Decimal(100) - Decimal(impostos.get('percentualdiferido',100))
