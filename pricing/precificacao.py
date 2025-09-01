@@ -5,13 +5,13 @@ from decimal import Decimal
 import psycopg
 from psycopg.rows import dict_row
 from psycopg_pool import PoolTimeout
-from pricing.utils.log import log_error, log_notify
-from pricing.pool_conn import pool
-from pricing.utils.cache import cache
-from pricing.utils.cache_redis import cache as cache_redis
-from pricing.utils.calculos import round_salles, round_two, round_up
-from pricing.query.atacado_imposto import SQL as sql_imposto
-from pricing.sql import (
+from utils.log import log_error, log_notify
+from pool_conn import pool
+from utils.cache import cache
+from utils.cache_redis import cache as cache_redis
+from utils.calculos import round_salles, round_two, round_up
+from query.atacado_imposto import SQL as sql_imposto
+from sql import (
     SQL_LOAD_REGRA,
     SQL_INIT_TEST,
     INSERT_LOG_PRECIFICACAO,
@@ -233,6 +233,11 @@ class Precificacao:
         """Criando precificação"""
         totalizador: int = 1
         for rul_o in regra:
+            
+            
+            if rul_o.get('idfilialsaldo') != 10296:
+                continue
+            
             # Listando regras por ordem de importancia
             if not rul_o.get('idfilialsaldo'):
                 continue
@@ -323,3 +328,6 @@ class Precificacao:
         frete.clear()
         preco_comparacao.clear()
         no_duplicate_key.clear()
+
+if __name__ == "__main__":
+    Precificacao()

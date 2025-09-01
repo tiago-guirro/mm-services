@@ -11,18 +11,18 @@ import inspect
 import psycopg
 from psycopg_pool import PoolTimeout
 from psycopg.rows import dict_row
-from pricing.utils.cache_redis import cache as cache_redis
-from pricing.query.ecommerce_produtos import SQL as sql_produtos
-from pricing.query.ecommerce_listando_processo import SQL as sql_processos
-from pricing.query.ecommerce_imposto import SQL as sql_impostos
-from pricing.query.ecommerce_regra_precificacao import SQL as sql_regra
-from pricing.sql import (INSERT_LOG_PRECIFICACAO,
+from utils.cache_redis import cache as cache_redis
+from query.ecommerce_produtos import SQL as sql_produtos
+from query.ecommerce_listando_processo import SQL as sql_processos
+from query.ecommerce_imposto import SQL as sql_impostos
+from query.ecommerce_regra_precificacao import SQL as sql_regra
+from sql import (INSERT_LOG_PRECIFICACAO,
                          INSERT_PRODUTOGRADEPRECOGRUPO,
                          SQL_LOAD_PRECOS_TOTAL)
-from pricing.utils.params import VINCULO, PROPORCAO_GERAL
-from pricing.utils.log import log_error, log_notify
-from pricing.pool_conn import pool
-from pricing.utils.calculos import round_salles, round_up, round_two
+from utils.params import VINCULO, PROPORCAO_GERAL
+from utils.log import log_error, log_notify
+from pool_conn import pool
+from utils.calculos import round_salles, round_up, round_two
 
 def gerar_hash(chave: str) -> str:
     """Gerando hash"""

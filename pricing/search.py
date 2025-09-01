@@ -1,8 +1,8 @@
 """Módulo de precificação e criação do multi-grupo preço MM."""
 import psycopg
-from pricing.utils.log import logger
-from pricing.pool_conn import pool
-from pricing.sql import PRODUTOS_TSVECTOR
+from utils.log import logger
+from pool_conn import pool
+from sql import PRODUTOS_TSVECTOR
 
 def atualizacao_search():
     """Atualizacao"""

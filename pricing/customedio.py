@@ -2,9 +2,9 @@
 from queue import Queue, Empty
 import psycopg
 from psycopg.rows import dict_row
-from pricing.pool_conn import pool
-from pricing.utils.log import log_error, log_notify
-from pricing.sql import (
+from pool_conn import pool
+from utils.log import log_error, log_notify
+from sql import (
     SQL_LOAD_PRODUTO_FILIAL,
     SQL_GET_FILIAIS_PRECIFICAR,
     SQL_UPSERT_CUSTOMEDIO

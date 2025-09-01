@@ -3,13 +3,13 @@
 import sys
 from pytz import timezone
 from apscheduler.schedulers.blocking import BlockingScheduler
-from pricing.utils.log import logger
-from pricing.pool_conn import pool
-from pricing.precificacao import Precificacao
-from pricing.search import atualizacao_search
-from pricing.customedio import CustoMedio
-from pricing.promocao import sales_disable
-from pricing.precificacao_ecommerce import execucao_multi
+from utils.log import logger
+from pool_conn import pool
+from precificacao import Precificacao
+from search import atualizacao_search
+from customedio import CustoMedio
+from promocao import sales_disable
+from precificacao_ecommerce import execucao_multi
 
 tmzn = timezone('America/Sao_Paulo')
 scheduler = BlockingScheduler()

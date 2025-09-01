@@ -7,7 +7,7 @@ from psycopg import Connection
 from psycopg.pq import TransactionStatus
 from psycopg.errors import Error as PsycopgError
 from psycopg_pool import ConnectionPool
-from pricing.utils.log import logger
+from utils.log import logger
 
 _reconnect_lock = Lock()
 

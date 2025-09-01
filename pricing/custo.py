@@ -1,6 +1,6 @@
 """Módulo de precificação e criação do multi-grupo preço MM."""
 import psycopg
-from pricing.sql import SQL_CACHE_CUSTO
+from sql import SQL_CACHE_CUSTO
 
 def atualizacao_custo(pool, logger):
     """atualizacao_search"""
