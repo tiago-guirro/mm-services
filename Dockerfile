@@ -15,4 +15,4 @@ RUN pip install --upgrade pip \
 
 COPY . .
 
-CMD ["python3", "/code/main.py"]
+CMD ["python3", "/code/pricing/main.py"]

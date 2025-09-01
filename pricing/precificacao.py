@@ -5,9 +5,9 @@ from decimal import Decimal
 import psycopg
 from psycopg.rows import dict_row
 from psycopg_pool import PoolTimeout
-from utils.log import log_error, log_notify
 from pool_conn import pool
 from utils.cache import cache
+from utils.log import log_error, log_notify
 from utils.cache_redis import cache as cache_redis
 from utils.calculos import round_salles, round_two, round_up
 from query.atacado_imposto import SQL as sql_imposto
@@ -233,11 +233,6 @@ class Precificacao:
         """Criando precificação"""
         totalizador: int = 1
         for rul_o in regra:
-            
-            
-            if rul_o.get('idfilialsaldo') != 10296:
-                continue
-            
             # Listando regras por ordem de importancia
             if not rul_o.get('idfilialsaldo'):
                 continue
