@@ -1,8 +1,6 @@
 """Cálculos de preço com arredondamento específico"""
 from decimal import Decimal, ROUND_HALF_UP, ROUND_DOWN
 
-# getcontext().prec = 6
-
 def round_up(value: Decimal) -> Decimal:
     """
     Arredonda o valor para 4 casas decimais com arredondamento tradicional (meio para cima).

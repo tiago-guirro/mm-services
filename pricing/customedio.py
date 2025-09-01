@@ -68,3 +68,6 @@ class CustoMedio:
                         if isinstance(c, dict):
                             c_log.put(c)
         self._upsert_customedio()
+
+if __name__ == "__main__":
+    CustoMedio()
