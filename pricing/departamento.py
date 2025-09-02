@@ -31,7 +31,6 @@ def cache_departamento(pool, capture_exception, logger):
                     'iddepartamento' : departamento.get('iddepartamento'),
                     'arvore' : arvore
                     }
-                print(_key)
                 try:
                     with conn.transaction():
                         query = sql.makeinsertquery('arvore_departamento',_key,'ecode')

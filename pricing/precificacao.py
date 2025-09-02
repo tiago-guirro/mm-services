@@ -11,14 +11,12 @@ from utils.log import log_error, log_notify
 from utils.cache_redis import cache as cache_redis
 from utils.calculos import round_salles, round_two, round_up
 from query.atacado_imposto import SQL as sql_imposto
-from sql import (
-    SQL_LOAD_REGRA,
-    SQL_INIT_TEST,
-    INSERT_LOG_PRECIFICACAO,
-    INSERT_PRODUTOGRADEPRECOGRUPO,
-    SQL_FRETE_TOTAL,
-    SQL_LOAD_PRECOS_TOTAL
-    )
+from sql import (SQL_LOAD_REGRA,
+                 SQL_INIT_TEST,
+                 INSERT_LOG_PRECIFICACAO,
+                 INSERT_PRODUTOGRADEPRECOGRUPO,
+                 SQL_FRETE_TOTAL,
+                 SQL_LOAD_PRECOS_TOTAL)
 
 w_precos = Queue()
 w_log = Queue()
@@ -187,7 +185,11 @@ class Precificacao:
             return 0
         return get_data(idgrupopreco, classificacao)
 
-    def get_calc_sales_price(self, idproduto: int, customedio: Decimal, rl: dict) -> Decimal | None:
+    def get_calc_sales_price(self,
+                             idproduto: int,
+                             customedio: Decimal,
+                             idsituacaoorigem: int,
+                             rl: dict) -> Decimal | None:
         """Coletando no cache os dados por produto"""
         def _impostos() -> Any:
             chave = f"imposto:{int(rl.get('idfilial',0))}:{int(rl.get('idgrupopreco',0))}:{int(idproduto)}"
@@ -197,11 +199,16 @@ class Precificacao:
             if rl.get('idfilial') in (10001,10050,10083):
                 self.ops.get_impostos(idproduto)
             else:
+                icms_ = rl.get('icms', Decimal(0))
+                # Tratativa especial para produtos importados
+                # Que não são carregados pela base fiscal
+                if rl.get('idfilial') != 10281 and idsituacaoorigem == 2:
+                    icms_ = Decimal(4)
                 cache_redis.set(chave,
                                 {"idproduto": idproduto,
                                  "idfilial": rl.get('idfilial'),
                                  "idgrupopreco": rl.get('idgrupopreco'),
-                                 "icms_origem": rl.get('icms', Decimal(0)),
+                                 "icms_origem": icms_,
                                  "pis": rl.get('pis', Decimal(0)),
                                  "cofins": rl.get('cofins', Decimal(0)),
                                  "percentualbase": Decimal(100),
@@ -256,7 +263,6 @@ class Precificacao:
                 if key in no_duplicate_key:
                     continue
                 no_duplicate_key.add(key)
-
                 # Verificando o formato de agrupamento por idproduto.idgradex.idgradey ou idproduto
                 _customedio = custo.get('customedio')
                 if rul.get('agrupar_x_y', 'Não') == 'Sim':
@@ -265,8 +271,11 @@ class Precificacao:
                                                custo.get('classificacao','0'))
                 if _frete > 0:
                     rul.update({'frete' : _frete})
-                price: Decimal | None = self.get_calc_sales_price(custo.get('idproduto'),
-                                                                  _customedio,rul)
+                price: Decimal | None = self.get_calc_sales_price(
+                    custo.get('idproduto'),
+                    _customedio,
+                    custo.get('idsituacaoorigem'),
+                    rul)
                 if not price:
                     continue
                 # Validando preço zero ou igual customedio
