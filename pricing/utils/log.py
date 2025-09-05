@@ -16,13 +16,12 @@ logger = logging.getLogger(__name__)
 
 def log_redis(message, stype='notify'):
     """Gravando no redis o log do servidor"""
-    type_server = 'homolog' if str(os.getenv('LOG','False')) == 'True' else 'production'
-    key = f"worker:{stype}:{type_server}:{int(time.time() * 1000)}"
-    cache.client.set(key, message, ex=60*60*24)
+    if str(os.getenv('LOG','False')) == 'False':
+        key = f"worker:production:{stype}:{int(time.time() * 1000)}"
+        cache.client.set(key, message, ex=60*60*24*7)
 
 def log_notify(message):
     """Enviando mensagem somente local"""
-    log_redis(message)
     if str(os.getenv('LOG','False')) == 'True':
         logger.info(message)
 
