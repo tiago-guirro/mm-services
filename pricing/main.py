@@ -19,7 +19,8 @@ scheduler.add_job(sales_disable,
                   minute='*',
                   timezone=tmzn,
                   max_instances=1,
-                  id="Desabilitar_Promocao")
+                  id="Desabilitar_Promocao",
+                  name="Desabilitar_Promocao")
 scheduler.add_job(CustoMedio,
                   'cron',
                   day_of_week='mon-fri',
@@ -27,7 +28,8 @@ scheduler.add_job(CustoMedio,
                   minute="*",
                   timezone=tmzn,
                   max_instances=1,
-                  id="Atualizar_Custo_Medio")
+                  id="Atualizar_Custo_Medio",
+                  name="Atualizar_Custo_Medio")
 scheduler.add_job(Precificacao,
                   'cron',
                   day_of_week='mon-fri',
@@ -35,7 +37,9 @@ scheduler.add_job(Precificacao,
                   minute="*/15",
                   timezone=tmzn,
                   max_instances=1,
-                  id="Precificacao_Atacado")
+                  id="Precificacao_Atacado",
+                  name="Precificacao_Atacado"
+                  )
 scheduler.add_job(atualizacao_search,
                   'cron',
                   day_of_week='mon-fri',
@@ -43,14 +47,17 @@ scheduler.add_job(atualizacao_search,
                   minute='*/20',
                   timezone=tmzn,
                   max_instances=1,
-                  id="Atualizacao_Pesquisa")
+                  id="Atualizacao_Pesquisa",
+                  name="Atualizacao_Pesquisa")
 scheduler.add_job(execucao_multi,
                   'cron',
                   hour='7-19',
                   minute="*/30",
                   timezone=tmzn,
                   max_instances=1,
-                  id="Precificacao_Ecommerce")
+                  id="Precificacao_Ecommerce",
+                  name="Precificacao_Ecommerce"
+                  )
 
 try:
     scheduler.start()
