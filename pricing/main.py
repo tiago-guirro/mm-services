@@ -24,7 +24,7 @@ scheduler.add_job(CustoMedio,
                   'cron',
                   day_of_week='mon-fri',
                   hour='7-19',
-                  minute="*/10",
+                  minute="*",
                   timezone=tmzn,
                   max_instances=1,
                   id="Atualizar_Custo_Medio")
