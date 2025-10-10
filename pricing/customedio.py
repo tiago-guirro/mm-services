@@ -11,6 +11,7 @@ from sql import (
     )
 
 c_log = Queue()
+
 class CustoMedio:
 
     """Criando custos médios para precificação"""

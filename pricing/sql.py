@@ -954,14 +954,27 @@ select coalesce((select * from persistencia),'nao_atualizado') as situacao
 """
 
 SQL_SALES_DISABLE = """
+with
+  grupos as (
+	select 
+		distinct on (1,2)
+		coalesce(nullif(idfilial_faturamento,10083),10050) as idfilial,
+		idgrupopreco
+	from
+		ecode.multi_grupo mg 
+	where 
+		mg.cnpj_cpf is null 
+		and mg.situacao = 'Ativo'
+  )
 update  
   ecode.promocao promocao_base
 set 
   situacao = 'Inativo'
 from 
   ecode.promocao promocao
+  left join grupos grupo on promocao.idgrupopreco = grupo.idgrupopreco
   left join ecode.bonificacaoprodutoatacado(
-  case when promocao.idgrupopreco in (1008,1009,1010) then 10281 else 10050 end,
+  grupo.idfilial,
   promocao.idproduto,
   promocao.idgradex,
   promocao.idgradey) as bonificacao on true
