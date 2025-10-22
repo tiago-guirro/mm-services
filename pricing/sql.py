@@ -986,3 +986,123 @@ where
   and promocao.id = promocao_base.id
 returning promocao_base.*
 """
+
+
+SQL_LOAD_PRODUTO_FILIAL_VALIDADOS = """
+with produtos as (
+
+  select
+    p.idfilial,
+    p.idproduto,
+    p.idgradex,
+    p.idgradey,
+    sum(p.saldo * t.multiplicadordisponivel) as saldo
+  from
+    rst.produtogradesaldofilial p
+    left join sis.tiposaldoproduto t using (idtiposaldoproduto)
+  where
+    p.idfilial = %(idfilial)s
+  group by
+    1,2,3,4
+  having
+    sum(p.saldo * t.multiplicadordisponivel) > 0
+
+    union
+
+    select
+      i.idfilial,
+      i.idproduto,
+      i.idgradex,
+      i.idgradey,
+      i."quantidade" as saldo
+    from
+      rst.itempedidocompra i
+    where
+      i.idfilial = %(idfilial)s
+      and idsituacaopedidocompra = 1
+
+  ),
+  validado_custo as (
+
+  select
+    distinct on (1,2,3,4)
+	produtogradefilial.idfilial,
+	produtogradefilial.idproduto,
+	produtogradefilial.idgradex,
+	produtogradefilial.idgradey,
+	coalesce(ce.custo_calc_unit,0) as custo_calc_unit,
+    coalesce(ce.vlr_icms_st_recup_calc,0) as vlr_icms_st_recup_calc,
+    coalesce(ce.vlr_icms_proprio_entrada_unit,0) as vlr_icms_proprio_entrada_unit
+from
+	rst.produtogradefilial produtogradefilial
+	inner join produtos saldo using (idfilial, idproduto,idgradex, idgradey)
+	inner join glb.produto produto using (idproduto)
+    left join ecode.preco_customedio ce using (idfilial, idproduto,idgradex, idgradey)
+where
+	produtogradefilial.idfilial = %(idfilial)s
+	and substring(produto.iddepartamento::varchar,2,2) in ('01','02','03','04','05','06','07','08','09','13','15','19')
+	)
+
+select
+  tmp.idfilial,
+    tmp.idproduto,
+    tmp.idgradex,
+    tmp.idgradey,
+    tmp.custo_calc_unit,
+    tmp.vlr_icms_st_recup_calc,
+    tmp.vlr_icms_proprio_entrada_unit,
+    tmp.origem_reg
+from (
+
+  select
+    vc.idfilial,
+    vc.idproduto,
+    vc.idgradex,
+    vc.idgradey,
+    vc.custo_calc_unit as old_custo_calc_unit,
+    vc.vlr_icms_st_recup_calc as old_vlr_icms_st_recup_calc,
+    vc.vlr_icms_proprio_entrada_unit as old_vlr_icms_proprio_entrada_unit,
+    round(custo_medio.custo_calc_unit,2) as custo_calc_unit,
+	round(custo_medio.vlr_icms_st_recup_calc,2) as vlr_icms_st_recup_calc,
+	(CASE
+        WHEN cast(custo_medio.idfilial  as integer) = 10281
+		THEN (CASE WHEN coalesce(custo_medio.qtdenf,0) > 0
+					THEN round((coalesce(custo_medio.vlr_icms_proprio,0)/coalesce(custo_medio.qtdenf,0)),2)
+					ELSE round((coalesce(custo_medio.vlr_icms_proprio,0)/ 1),2)
+				END)
+		ELSE 0
+	END) as vlr_icms_proprio_entrada_unit,
+	custo_medio.origem_reg
+from
+    validado_custo vc
+    left join mm.busca_ultima_entrada_com_icms_itb_teste(
+	  case when vc.idfilial in (10001,10083) then 10050 else vc.idfilial end,
+	  vc.idproduto,
+	  vc.idgradex,
+      vc.idgradey,
+	  current_date,
+	  999999999) as custo_medio on true
+
+
+) tmp
+where
+  (tmp.old_custo_calc_unit <> tmp.custo_calc_unit
+  or tmp.old_vlr_icms_st_recup_calc <> tmp.vlr_icms_st_recup_calc
+  or tmp.old_vlr_icms_proprio_entrada_unit <> tmp.vlr_icms_proprio_entrada_unit)
+"""
+
+SQL_UPSERT_CUSTOMEDIO_VALIDADOS = """
+INSERT INTO ecode.preco_customedio (
+    idfilial, idproduto, idgradex, idgradey,
+    custo_calc_unit, vlr_icms_st_recup_calc,
+    vlr_icms_proprio_entrada_unit, origem_reg
+) values (%(idfilial)s,%(idproduto)s,%(idgradex)s,%(idgradey)s,
+%(custo_calc_unit)s,%(vlr_icms_st_recup_calc)s,%(vlr_icms_proprio_entrada_unit)s,%(origem_reg)s)
+ON CONFLICT (idfilial, idproduto, idgradex, idgradey)
+DO UPDATE SET
+    custo_calc_unit = EXCLUDED.custo_calc_unit,
+    vlr_icms_st_recup_calc = EXCLUDED.vlr_icms_st_recup_calc,
+    vlr_icms_proprio_entrada_unit = EXCLUDED.vlr_icms_proprio_entrada_unit,
+    origem_reg = EXCLUDED.origem_reg,
+    created_at = now()
+"""

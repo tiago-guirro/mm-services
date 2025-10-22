@@ -2,7 +2,7 @@
 import atexit
 import os
 from threading import Lock
-import psycopg
+# import psycopg
 from psycopg import Connection
 from psycopg.pq import TransactionStatus
 from psycopg.errors import Error as PsycopgError
@@ -15,19 +15,33 @@ def config_conn(conn):
     """Eliminando prepare"""
     conn.prepare_threshold = None
 
-def reset_connection(conn: psycopg.Connection) -> None:
-    """Reseta uma conexão antes de devolvê-la ao pool"""
+def reset_connection(conn: Connection) -> None:
+    """Reset seguro, sem transações residuais, compatível com PgBouncer e psycopg_pool."""
     try:
-        if _reconnect_lock:
-            ts = conn.info.transaction_status
-            if ts in (TransactionStatus.INTRANS, TransactionStatus.INERROR):
-                logger.debug("Conexão ainda em transação, aplicando rollback.")
+        ts = conn.info.transaction_status
+        if ts == TransactionStatus.UNKNOWN:
+            print("[RESET] UNKNOWN → fechando conexão")
+            conn.close()
+            return
+        if ts in (TransactionStatus.INTRANS, TransactionStatus.INERROR):
+            try:
                 conn.rollback()
-            if ts == TransactionStatus.UNKNOWN:
-                logger.error("Conexão em estado UNKNOWN — fechando conexão.")
+            except Exception:
                 conn.close()
-    except PsycopgError as e:
-        logger.warning("Erro ao resetar conexão, forçando fechamento: %s", e)
+                return
+        ts = conn.info.transaction_status
+        if ts != TransactionStatus.IDLE:
+            conn.close()
+            return
+        prev_autocommit = conn.autocommit
+        conn.autocommit = True
+        try:
+            with conn.cursor() as cur:
+                cur.execute("RESET ALL;")
+                cur.execute("DEALLOCATE ALL;")
+        finally:
+            conn.autocommit = prev_autocommit  # restaura estado original
+    except Exception:
         conn.close()
 
 def check_connection(conn: Connection) -> None:

@@ -1,5 +1,4 @@
 """Módulo de precificação e criação do multi-grupo preço MM."""
-
 import sys
 from pytz import timezone
 from apscheduler.schedulers.blocking import BlockingScheduler
@@ -23,18 +22,18 @@ scheduler.add_job(sales_disable,
                   name="Desabilitar_Promocao")
 scheduler.add_job(CustoMedio,
                   'cron',
-                  day_of_week='mon-fri',
+                  day_of_week='mon-sat',
                   hour='7-19',
-                  minute="*",
+                  minute="*/15",
                   timezone=tmzn,
                   max_instances=1,
                   id="Atualizar_Custo_Medio",
                   name="Atualizar_Custo_Medio")
 scheduler.add_job(Precificacao,
                   'cron',
-                  day_of_week='mon-fri',
+                  day_of_week='mon-sat',
                   hour='7-19',
-                  minute="*/15",
+                  minute="*/30",
                   timezone=tmzn,
                   max_instances=1,
                   id="Precificacao_Atacado",
@@ -42,15 +41,16 @@ scheduler.add_job(Precificacao,
                   )
 scheduler.add_job(atualizacao_search,
                   'cron',
-                  day_of_week='mon-fri',
+                  day_of_week='mon-sat',
                   hour='7-19',
-                  minute='*/20',
+                  minute='*/10',
                   timezone=tmzn,
                   max_instances=1,
                   id="Atualizacao_Pesquisa",
                   name="Atualizacao_Pesquisa")
 scheduler.add_job(execucao_multi,
                   'cron',
+                  day_of_week='mon-sat',
                   hour='7-19',
                   minute="*/30",
                   timezone=tmzn,

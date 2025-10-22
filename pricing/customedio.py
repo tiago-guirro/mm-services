@@ -5,9 +5,9 @@ from psycopg.rows import dict_row
 from pool_conn import pool
 from utils.log import log_error, log_notify
 from sql import (
-    SQL_LOAD_PRODUTO_FILIAL,
+    SQL_LOAD_PRODUTO_FILIAL_VALIDADOS,
     SQL_GET_FILIAIS_PRECIFICAR,
-    SQL_UPSERT_CUSTOMEDIO
+    SQL_UPSERT_CUSTOMEDIO_VALIDADOS
     )
 
 c_log = Queue()
@@ -33,23 +33,23 @@ class CustoMedio:
     def _set_write(self, data):
         try:
             with pool.connection() as conn:
-                with conn.cursor() as cur:
-                    cur.executemany(SQL_UPSERT_CUSTOMEDIO,data)
-                conn.commit()
+                with conn.transaction():
+                    with conn.cursor() as cur:
+                        cur.executemany(SQL_UPSERT_CUSTOMEDIO_VALIDADOS,data)
         except (psycopg.Error,
                 psycopg.errors.DuplicatePreparedStatement,
                 psycopg.errors.InvalidSqlStatementName) as e:
             log_error(f"_upsert_customedio {e}")
 
     def _upsert_customedio(self):
-        n = 1
+        n = 0
         gravando = []
         total = c_log.qsize()
         while not c_log.empty():
             try:
                 gravando.append(c_log.get_nowait())
                 c_log.task_done()
-                if n % 300 == 0:
+                if n > 0 and n % 50 == 0:
                     self._set_write(gravando)
                     log_notify(f"Gravando custo: {n} de {total}.")
                     gravando.clear()
@@ -62,13 +62,24 @@ class CustoMedio:
 
     def _load_produtos_filial(self):
         for idfilial in self._filiais:
-            with pool.connection() as conn:
-                with conn.cursor(row_factory=dict_row) as cur:
-                    cur.execute(SQL_LOAD_PRODUTO_FILIAL, {'idfilial' : idfilial}, prepare=False)
-                    for c in cur:
-                        if isinstance(c, dict):
-                            c_log.put(c)
-        self._upsert_customedio()
+            log_notify(f"Carregando filial {idfilial}.")
+            try:
+                with pool.connection() as conn:
+                    with conn.cursor(row_factory=dict_row) as cur:
+                        cur.execute(SQL_LOAD_PRODUTO_FILIAL_VALIDADOS,
+                                    {'idfilial' : idfilial}, prepare=False)
+                        for c in cur:
+                            if isinstance(c, dict):
+                                c_log.put(c)
+            except (psycopg.Error,
+                psycopg.errors.DuplicatePreparedStatement,
+                psycopg.errors.InvalidSqlStatementName) as e:
+                log_error(f"_upsert_customedio {e}")
+
+        if c_log.qsize() > 0:
+            self._upsert_customedio()
+            return
+        log_notify("Nada a ser atualizado.")
 
 if __name__ == "__main__":
     CustoMedio()
